@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISEPAM — Dashboard</title>
+    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <h2>Patrimônio</h2>
+            <p id="usuario-nome">Carregando...</p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-item active" href="dashboard.html">Dashboard</a>
+            <a class="nav-item" href="inventario.html">Inventário</a>
+            <a class="nav-item" href="cadastrar-bem.html">Cadastrar</a>
+            <a class="nav-item" href="chamados.html">Chamados</a>
+            <a class="nav-item" href="manutencoes.html">Manutenções</a>
+            <a class="nav-item" href="consultas.html">Consultas</a>
+            <a class="nav-item" href="relatorios.html">Relatórios</a>
+            <a class="nav-item" href="usuarios.html">Usuários</a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="theme-toggle" onclick="alternarTema()">Modo Escuro</button>
+            <a class="nav-item sair" onclick="sair()">Sair</a>
+        </div>
+    </aside>
+
+    <main class="main">
+      <div class="content-wrap">
+        <h1 class="page-title">Dashboard</h1>
+
+        <div class="cards-grid">
+            <div class="card card-clicavel" data-grafico-alvo="chart-card-equipamentos" tabindex="0">
+                <div class="card-number" id="total-itens">0</div>
+                <div class="card-label">Itens Totais</div>
+            </div>
+            <div class="card card-clicavel" data-grafico-alvo="chart-card-chamados-status" tabindex="0">
+                <div class="card-number" id="total-chamados">0</div>
+                <div class="card-label">Chamados Totais</div>
+            </div>
+            <div class="card card-clicavel" data-grafico-alvo="chart-card-equipamentos" data-destacar-fatia="Em Manutenção" tabindex="0">
+                <div class="card-number" id="em-manutencao">0</div>
+                <div class="card-label">Em Manutenção</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card" id="chart-card-equipamentos">
+                <h3>Equipamentos por status</h3>
+                <div class="chart-card-corpo">
+                    <canvas id="grafico-equipamentos" height="220"></canvas>
+                    <p class="chart-vazio" id="grafico-equipamentos-vazio" hidden>Nenhum equipamento cadastrado ainda.</p>
+                </div>
+            </div>
+            <div class="chart-card" id="chart-card-chamados-status">
+                <h3>Chamados por status</h3>
+                <div class="chart-card-corpo">
+                    <canvas id="grafico-chamados-status" height="220"></canvas>
+                    <p class="chart-vazio" id="grafico-chamados-status-vazio" hidden>Nenhum chamado registrado ainda.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="recent-card">
+            <h3>Atividades Recentes</h3>
+            <div class="recent-empty">Nenhuma atividade recente.</div>
+        </div>
+      </div>
+    </main>
+</div>
+
+<script src="chart.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

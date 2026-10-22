@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISEPAM — Relatórios</title>
+    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <h2>Patrimônio</h2>
+            <p id="usuario-nome">Carregando...</p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-item" href="dashboard.html">Dashboard</a>
+            <a class="nav-item" href="inventario.html">Inventário</a>
+            <a class="nav-item" href="cadastrar-bem.html">Cadastrar</a>
+            <a class="nav-item" href="chamados.html">Chamados</a>
+            <a class="nav-item" href="manutencoes.html">Manutenções</a>
+            <a class="nav-item" href="consultas.html">Consultas</a>
+            <a class="nav-item active" href="relatorios.html">Relatórios</a>
+            <a class="nav-item" href="usuarios.html">Usuários</a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="theme-toggle" onclick="alternarTema()">Modo Escuro</button>
+            <a class="nav-item sair" onclick="sair()">Sair</a>
+        </div>
+    </aside>
+
+    <main class="main">
+      <div class="content-wrap">
+        <h1 class="page-title">Relatórios</h1>
+
+        <div class="form-card" style="max-width: 100%;">
+            <div class="abas-relatorio">
+                <button class="aba active" onclick="trocarAba('patrimonio', this)">Patrimônio</button>
+                <button class="aba" onclick="trocarAba('chamados', this)">Chamados</button>
+                <button class="aba" data-so-admin onclick="trocarAba('atividades', this)">Usuários</button>
+                <button class="aba" onclick="trocarAba('estatisticas', this)">Estatísticas</button>
+            </div>
+
+            <div class="relatorio-filtros" style="margin-top: 24px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+
+                <!-- Filtro de categoria (Patrimônio) -->
+                <div class="form-group" style="margin:0; min-width: 180px;">
+                    <label>Categoria:</label>
+                    <!-- Alinhado com as categorias usadas no banco -->
+                    <select id="categoria-relatorio">
+                        <option value="todas">Todas</option>
+                        <option value="Informatica">Informática</option>
+                        <option value="Mobiliario">Mobiliário</option>
+                        <option value="Climatizacao">Climatização</option>
+                        <option value="Eletrodomestico">Eletrodoméstico</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+
+                <!-- Filtro de status (Chamados) - exibido apenas na aba chamados -->
+                <div class="form-group" id="filtro-status-chamados" style="margin:0; min-width: 180px; display:none;">
+                    <label>Status:</label>
+                    <!-- Alinhado com ENUM do banco: aberto, em_analise, em_execucao, concluido, cancelado -->
+                    <select id="status-relatorio">
+                        <option value="todos">Todos</option>
+                        <option value="aberto">Aberto</option>
+                        <option value="em_analise">Em Análise</option>
+                        <option value="em_execucao">Em Execução</option>
+                        <option value="concluido">Concluído</option>
+                        <option value="cancelado">Cancelado</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-end;">
+                    <button class="btn-save" id="btn-visualizar-relatorio" onclick="visualizarRelatorio()">Visualizar</button>
+                </div>
+            </div>
+
+            <!-- Resultado do relatório -->
+            <div id="resultado-relatorio" style="margin-top: 24px; overflow-x: auto;"></div>
+
+            <div class="relatorio-exportar">
+                <button class="btn-save" onclick="baixarPDF()" style="background: #7c3aed;">Exportar PDF</button>
+            </div>
+        </div>
+      </div>
+    </main>
+</div>
+
+<style>
+.abas-relatorio {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 4px;
+}
+
+.aba {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-family: var(--font);
+    font-weight: 500;
+    color: var(--text-mid);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.aba:hover { color: var(--accent); }
+.aba:focus { outline: none; }
+.aba:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px 6px 0 0; }
+.aba.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+#resultado-relatorio table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+#resultado-relatorio th, #resultado-relatorio td { padding: 10px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border); }
+#resultado-relatorio thead tr { background: var(--bg); }
+#resultado-relatorio th { font-weight: 600; color: var(--text-mid); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+.relatorio-exportar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+</style>
+
+<script src="chart.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

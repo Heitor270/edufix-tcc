@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISEPAM — Inventário</title>
+    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <h2>Patrimônio</h2>
+            <p id="usuario-nome">Carregando...</p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-item" href="dashboard.html">Dashboard</a>
+            <a class="nav-item active" href="inventario.html">Inventário</a>
+            <a class="nav-item" href="cadastrar-bem.html">Cadastrar</a>
+            <a class="nav-item" href="chamados.html">Chamados</a>
+            <a class="nav-item" href="manutencoes.html">Manutenções</a>
+            <a class="nav-item" href="consultas.html">Consultas</a>
+            <a class="nav-item" href="relatorios.html">Relatórios</a>
+            <a class="nav-item" href="usuarios.html">Usuários</a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="theme-toggle" onclick="alternarTema()">Modo Escuro</button>
+            <a class="nav-item sair" onclick="sair()">Sair</a>
+        </div>
+    </aside>
+
+    <main class="main">
+      <div class="content-wrap">
+        <h1 class="page-title">Inventário de Bens</h1>
+
+        <div class="table-card">
+            <div class="table-filters">
+                <input type="text" id="filtro-patrimonio" placeholder="Filtrar por Nº" oninput="filtrarTabela()" />
+                <input type="text" id="filtro-nome" placeholder="Filtrar por Nome" oninput="filtrarTabela()" />
+                <select id="filtro-categoria" onchange="filtrarTabela()" aria-label="Categoria">
+                    <option value="">Todas as categorias</option>
+                    <option value="Informatica">Informática</option>
+                    <option value="Mobiliario">Mobiliário</option>
+                    <option value="Climatizacao">Climatização</option>
+                    <option value="Eletrodomestico">Eletrodoméstico</option>
+                    <option value="Outro">Outro</option>
+                </select>
+                <select id="filtro-status" onchange="filtrarTabela()" aria-label="Status">
+                    <option value="">Todos os status</option>
+                    <option value="disponivel">Disponível</option>
+                    <option value="em_uso">Em uso</option>
+                    <option value="em_manutencao">Em manutenção</option>
+                    <option value="inativo">Inativo</option>
+                </select>
+            </div>
+            <div class="tabela-rolagem">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nº</th>
+                        <th>Nome</th>
+                        <th>Categoria</th>
+                        <th>Local</th>
+                        <th>Conservação</th>
+                        <th>Status</th>
+                        <th class="coluna-acoes">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="corpo-tabela">
+                    <tr class="empty-row">
+                        <td colspan="7">Nenhum bem encontrado.</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+      </div>
+    </main>
+</div>
+
+<script src="script.js"></script>
+<script src="modulos.js"></script>
+</body>
+</html>

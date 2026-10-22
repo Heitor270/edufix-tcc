@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISEPAM — Login</title>
+    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="auth-body">
+
+<button class="theme-toggle-auth" onclick="alternarTema()">Modo Escuro</button>
+
+<div class="auth-card">
+    <div class="auth-logo">
+        <h1>ISEPAM</h1>
+        <p>Acesse o sistema</p>
+    </div>
+
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="senha" placeholder="Senha" />
+    <button class="btn-primary" onclick="login()">Entrar</button>
+    <p class="erro" id="erro"></p>
+
+    <div class="auth-link">
+        Não tem conta? <a onclick="window.location.href='cadastro.html'">Criar cadastro</a>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

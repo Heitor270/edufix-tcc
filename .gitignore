@@ -1,0 +1,16 @@
+# Segredos — cada computador tem o seu, nunca commitar
+Backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Config de senha alternativa (cada PC tem a sua)
+Backend/config_local.py
+Backend/.env.txt
