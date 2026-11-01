@@ -123,6 +123,32 @@ CONSULTAS = [
         'objeto': {'tipo': 'view', 'nome': 'vw_manutencoes_completas'},
         'ordem': 'data_inicio DESC, id_manutencao DESC',
     },
+    {
+        'id': 'I7', 'nivel': 'intermediaria',
+        'titulo': 'Bens por setor da escola',
+        'descricao': 'Quantos bens há em cada sala ou setor, por situação, e quantos têm chamado em andamento.',
+        'parametros': [],
+        'objeto': {'tipo': 'view', 'nome': 'vw_bens_por_setor'},
+        'ordem': 'total_bens DESC, setor',
+        'grafico': {'tipo': 'bar', 'rotulo': 'setor', 'valores': ['disponiveis', 'em_uso', 'em_manutencao', 'inativos']},
+    },
+    {
+        'id': 'I8', 'nivel': 'intermediaria',
+        'titulo': 'Manutenções e tempo médio de reparo',
+        'descricao': 'Bens que já passaram por manutenção, com o tempo médio de reparo em dias e o custo total.',
+        'parametros': [],
+        'objeto': {'tipo': 'view', 'nome': 'vw_manutencao_tempo_medio_reparo'},
+        'ordem': 'manutencoes_em_andamento DESC, dias_medio_reparo DESC, equipamento',
+        'grafico': {'tipo': 'bar', 'rotulo': 'equipamento', 'valores': ['dias_medio_reparo']},
+    },
+    {
+        'id': 'I9', 'nivel': 'intermediaria',
+        'titulo': 'Patrimônio por responsável',
+        'descricao': 'Quais bens cada professor ou funcionário acompanha, com o total de chamados e os que seguem em andamento.',
+        'parametros': [],
+        'objeto': {'tipo': 'view', 'nome': 'vw_patrimonio_por_responsavel'},
+        'ordem': 'chamados DESC, responsavel',
+    },
     # ───────── AVANCADA ─────────
     {
         'id': 'A1', 'nivel': 'avancada',
@@ -200,6 +226,22 @@ CONSULTAS = [
         'objeto': {'tipo': 'procedure', 'nome': 'sp_linha_do_tempo'},
     },
     # ───────── PROCEDURE ─────────
+    {
+        'id': 'A10', 'nivel': 'avancada',
+        'titulo': 'Auditoria do patrimônio',
+        'descricao': 'Histórico de cadastros, transferências de sala, mudanças de status e exclusões dos bens.',
+        'parametros': [],
+        'objeto': {'tipo': 'view', 'nome': 'vw_auditoria_patrimonio'},
+        'ordem': 'data_hora DESC, id_log DESC',
+    },
+    {
+        'id': 'A11', 'nivel': 'avancada',
+        'titulo': 'Bens críticos',
+        'descricao': 'Bens ativos com chamado em andamento ou com custo de manutenção acima da média.',
+        'parametros': [],
+        'objeto': {'tipo': 'view', 'nome': 'vw_bens_criticos'},
+        'ordem': 'chamados_ativos DESC, custo_manutencao DESC, equipamento',
+    },
     {
         'id': 'P1', 'nivel': 'procedure',
         'titulo': 'Resumo do inventário',

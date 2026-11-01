@@ -290,7 +290,7 @@ def tratar_erro_do_banco(e):
     if e.errno in (1305, 1146, 1356):   # procedure/function/view não existe
         return jsonify({'sucesso': False,
                         'mensagem': 'Falta um objeto do banco de dados. Execute os scripts SQL '
-                                    '(functions, views, procedures e triggers) no MySQL.'}), 500
+                                    '(functions, procedures, triggers e views) no MySQL.'}), 500
     return tratar_erro_geral(e)
 
 
@@ -905,8 +905,9 @@ _OBJETOS_ESPERADOS = {
     'VIEW': [c['objeto']['nome'] for c in consultas.CONSULTAS if c['objeto']['tipo'] == 'view'],
     'PROCEDURE': sorted({c['objeto']['nome'] for c in consultas.CONSULTAS if c['objeto']['tipo'] == 'procedure'}
                         | {'sp_alterar_status_chamado', 'sp_sincronizar_equipamento',
-                           'sp_promover_admin', 'sp_remover_usuario'}),
-    'FUNCTION': ['fn_usuario_eh_admin', 'fn_manutencoes_em_andamento', 'fn_total_vinculos_usuario',
+                           'sp_promover_admin', 'sp_remover_usuario',
+                           'sp_transferir_equipamento', 'sp_historico_equipamento'}),
+    'FUNCTION': ['fn_chamados_ativos_equipamento', 'fn_equipamento_inativo', 'fn_usuario_eh_admin', 'fn_manutencoes_em_andamento', 'fn_total_vinculos_usuario',
                  'fn_custo_total_chamado', 'fn_custo_total_manutencao', 'fn_verificar_disponibilidade',
                  'fn_total_chamados_equipamento'],
 }
@@ -926,7 +927,7 @@ def _objetos_faltando():
     faltam += [n for n in _OBJETOS_ESPERADOS['VIEW'] if n not in views]
     faltam += [n for n in _OBJETOS_ESPERADOS['PROCEDURE'] if ('PROCEDURE', n) not in existentes]
     faltam += [n for n in _OBJETOS_ESPERADOS['FUNCTION'] if ('FUNCTION', n) not in existentes]
-    if triggers < 6:
+    if triggers < 11:
         faltam.append('triggers (triggers.sql)')
     return faltam
 
@@ -941,7 +942,7 @@ def _conferir_conexao_ao_subir():
         faltam = _objetos_faltando()
         if faltam:
             print(f"✖ Faltam {len(faltam)} objeto(s) no banco: {', '.join(faltam[:6])}{' ...' if len(faltam) > 6 else ''}. "
-                  "Execute no MySQL, nesta ordem: functions.sql, views.sql, procedures.sql, triggers.sql")
+                  "Execute no MySQL, nesta ordem: functions.sql, procedures.sql, triggers.sql, views.sql")
         else:
             print('✔ Views, functions, procedures e triggers do banco encontradas')
     except mysql.connector.Error as e:

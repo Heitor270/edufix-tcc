@@ -2,16 +2,16 @@
 
 ## Banco de dados: ordem dos scripts (pasta `Banco/`)
 
-Rode no MySQL 8, **nesta ordem**:
+Rode no MySQL 8, **nesta ordem** (cada script usa o anterior):
 
 | # | Arquivo | O que cria |
 |---|---|---|
 | 1 | `inventario_escolar.sql` | estrutura (**apaga e recria** o banco `inventario_escolar`) |
-| 2 | `functions.sql` | 9 functions (5 que já existiam + 4 novas) |
-| 3 | `views.sql` | 14 views = as consultas sem parâmetro |
-| 4 | `procedures.sql` | 14 procedures (3 de relatório + 7 consultas com parâmetro + 4 de operação) |
-| 5 | `triggers.sql` | 6 triggers (data de fechamento, e-mail padronizado, status do equipamento) |
-| - | `demonstracao.sql` | roda cada objeto, para mostrar ao professor (só leitura) |
+| 2 | `functions.sql` | 11 functions (5 originais + 6 novas) |
+| 3 | `procedures.sql` | 16 procedures (relatórios, consultas com parâmetro, regras de negócio, transferência e histórico) |
+| 4 | `triggers.sql` | tabela `log_patrimonio` + 11 triggers (auditoria, validação, automação, padronização) |
+| 5 | `views.sql` | 19 views (14 de consulta + 5 de patrimônio) |
+| - | `demonstracao.sql` | roda cada objeto, para mostrar ao professor |
 
 Os scripts 2 a 5 podem ser executados de novo sem problema (começam com `DROP ... IF EXISTS`).
 Se o 1º arquivo já foi rodado antes, **não rode de novo** (ele zera os dados): rode só do 2 em diante.
@@ -48,7 +48,7 @@ Nenhum deles vai para o GitHub (`.gitignore`). Ao subir, o app imprime uma linha
 | Chamados | **Editar**, **Histórico** (linha do tempo) e nome do equipamento em cada chamado |
 | Manutenções (nova) | CRUD completo, cards-resumo, filtro por situação, concluir com 1 clique |
 | Usuários (nova) | CRUD completo (cadastrar, editar, trocar perfil/senha, remover) |
-| Consultas (nova) | 24 consultas (simples, intermediárias, complexas e resumos) com filtros, tabela, gráfico, **CSV** e **PDF**. O SQL de cada uma fica no banco (views/procedures), não na tela |
+| Consultas (nova) | 29 consultas (simples, intermediárias, complexas e resumos) com filtros, tabela, gráfico, **CSV** e **PDF**. O SQL de cada uma fica no banco (views/procedures), não na tela |
 | Relatórios | botão Exportar PDF agora funciona (impressão do navegador → "Salvar como PDF") |
 
 ### Regras de negócio implementadas
