@@ -40,12 +40,13 @@
                 <input type="text" id="patrimonio-chamado" placeholder="Nº do Patrimônio *" inputmode="numeric" />
             </div>
             <div class="form-group">
-                <input type="text" id="descricao-chamado" placeholder="Descrição do problema *" />
+                <input type="text" id="descricao-chamado" placeholder="Descrição do problema * (mín. 10 caracteres)" />
             </div>
             <div class="form-group">
                 <label>Prioridade:</label>
                 <!-- Valores alinhados com ENUM do banco: baixa, media, alta, critica -->
                 <select id="prioridade-chamado">
+                    <option value="automatica">Automática (o sistema sugere)</option>
                     <option value="baixa">Baixa</option>
                     <option value="media" selected>Média</option>
                     <option value="alta">Alta</option>

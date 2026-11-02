@@ -290,7 +290,7 @@ def tratar_erro_do_banco(e):
     if e.errno in (1305, 1146, 1356):   # procedure/function/view não existe
         return jsonify({'sucesso': False,
                         'mensagem': 'Falta um objeto do banco de dados. Execute os scripts SQL '
-                                    '(functions, procedures, triggers e views) no MySQL.'}), 500
+                                    '(functions, views, procedures e triggers) no MySQL.'}), 500
     return tratar_erro_geral(e)
 
 
@@ -438,15 +438,16 @@ def listar_equipamentos():
     status = request.args.get('status', '').strip()
     busca = request.args.get('busca', '').strip()
     if categoria:
-        where.append('categoria = %s')
+        where.append('e.categoria = %s')
         params.append(categoria)
     if status:
-        where.append('status = %s')
+        where.append('e.status = %s')
         params.append(status)
     if busca:
-        where.append('(nome LIKE %s OR numero_patrimonio LIKE %s)')
+        where.append('(e.nome LIKE %s OR e.numero_patrimonio LIKE %s)')
         params += [f'%{busca}%', f'%{busca}%']
-    sql = 'SELECT * FROM equipamento'
+    # em_movimentacao = 1 quando o bem está "em trânsito" entre setores (function do banco)
+    sql = 'SELECT e.*, fn_equipamento_em_movimentacao(e.id_equipamento) AS em_movimentacao FROM equipamento e'
     if where:
         sql += ' WHERE ' + ' AND '.join(where)
     return jsonify(consultar(sql + ' ORDER BY nome', tuple(params)))
@@ -456,14 +457,22 @@ def listar_equipamentos():
 def detalhar_equipamento(id):
     equipamento = consultar("""
         SELECT e.*,
+               s.nome                                          AS setor,
                fn_custo_total_manutencao(e.id_equipamento)     AS custo_total_manutencao,
                fn_total_chamados_equipamento(e.id_equipamento) AS total_chamados,
-               fn_verificar_disponibilidade(e.id_equipamento)  AS disponibilidade
+               fn_verificar_disponibilidade(e.id_equipamento)  AS disponibilidade,
+               fn_equipamento_em_movimentacao(e.id_equipamento) AS em_movimentacao,
+               fn_idade_equipamento_anos(e.id_equipamento)     AS idade_anos
         FROM equipamento e
+        LEFT JOIN setor s ON s.id_setor = e.id_setor
         WHERE e.id_equipamento = %s
     """, (id,), um=True)
     if not equipamento:
         return jsonify({'sucesso': False, 'mensagem': 'Equipamento não encontrado'}), 404
+    if equipamento['em_movimentacao']:
+        equipamento['movimentacao'] = consultar(
+            'SELECT setor_origem, setor_destino, responsavel, data_inicio '
+            'FROM vw_equipamentos_em_movimentacao WHERE id_equipamento = %s', (id,), um=True)
     return jsonify(equipamento)
 
 
@@ -514,6 +523,53 @@ def deletar_equipamento(id):
     return ok('Equipamento removido!')
 
 
+# ─── SETOR E MOVIMENTAÇÃO DO PATRIMÔNIO ────
+
+def _id_quem_logou():
+    return int(request.headers.get('X-Usuario-Id', '0'))
+
+
+@app.route('/setores', methods=['GET'])
+def listar_setores():
+    return jsonify(consultar('SELECT * FROM vw_setores_resumo ORDER BY setor'))
+
+
+@app.route('/equipamentos/<int:id>/movimentacao', methods=['POST'])
+def movimentar_equipamento(id):
+    """Transferência em duas etapas (o bem fica "em trânsito" no meio).
+    acao = iniciar (exige setor_destino) | concluir | cancelar. Só administrador; as regras
+    (bem inativo/em manutenção não se move, uma movimentação por vez...) estão nas procedures/triggers."""
+    exigir_admin()
+    dados = corpo('acao')
+    exigir_em(dados['acao'], ('iniciar', 'concluir', 'cancelar'), 'acao')
+    quem = _id_quem_logou()
+    if dados['acao'] == 'iniciar':
+        destino = ' '.join(str(dados.get('setor_destino', '')).split())
+        if len(destino) < 2:
+            raise ErroRequisicao('Informe o setor de destino (mínimo 2 letras).')
+        chamar_procedure('sp_garantir_setor', [destino], commit=True)
+        setor = consultar('SELECT id_setor FROM setor WHERE nome = %s', (destino,), um=True)
+        chamar_procedure('sp_iniciar_movimentacao',
+                         [id, setor['id_setor'], quem, str(dados.get('observacao', ''))[:255]], commit=True)
+        return ok(f'Transferência para "{destino}" iniciada. O bem está em trânsito.')
+    if dados['acao'] == 'concluir':
+        chamar_procedure('sp_concluir_movimentacao', [id, quem], commit=True)
+        return ok('Transferência concluída. O bem chegou ao novo setor.')
+    chamar_procedure('sp_cancelar_movimentacao', [id, quem], commit=True)
+    return ok('Transferência cancelada. O bem continua no setor de origem.')
+
+
+@app.route('/movimentacoes', methods=['GET'])
+def listar_movimentacoes():
+    return jsonify(consultar('SELECT * FROM vw_movimentacoes ORDER BY data_inicio DESC, id_movimentacao DESC'))
+
+
+@app.route('/alertas', methods=['GET'])
+def listar_alertas():
+    """Alertas operacionais calculados no banco (view vw_alertas_operacionais)."""
+    return jsonify(consultar('SELECT tipo, alerta FROM vw_alertas_operacionais ORDER BY tipo, alerta'))
+
+
 # ─── CHAMADO ───────────────────────────────
 
 @app.route('/chamados', methods=['GET'])
@@ -537,13 +593,19 @@ def detalhar_chamado(id):
 @app.route('/chamados', methods=['POST'])
 def abrir_chamado():
     dados = corpo('id_usuario', 'prioridade', 'descricao_problema')
-    exigir_em(dados['prioridade'], PRIORIDADES, 'prioridade')
+    exigir_em(dados['prioridade'], PRIORIDADES | {'automatica'}, 'prioridade')
+    prioridade = dados['prioridade']
+    if prioridade == 'automatica':
+        # o banco sugere a prioridade pela descrição, pelo estado do bem e pela reincidência
+        prioridade = consultar('SELECT fn_classificar_prioridade(%s, %s) AS p',
+                               (dados['descricao_problema'], dados.get('id_equipamento')), um=True)['p']
+    # o histórico (1º registro "aberto") é gravado sozinho pela trigger trg_chamado_after_insert
     executar("""
         INSERT INTO chamado (id_usuario, id_equipamento, prioridade, descricao_problema, observacoes)
         VALUES (%s, %s, %s, %s, %s)
-    """, (dados['id_usuario'], dados.get('id_equipamento'), dados['prioridade'],
+    """, (dados['id_usuario'], dados.get('id_equipamento'), prioridade,
           dados['descricao_problema'], dados.get('observacoes', '')))
-    return ok('Chamado aberto!')
+    return ok('Chamado aberto!', prioridade=prioridade)
 
 
 @app.route('/chamados/<int:id>', methods=['PUT'])
@@ -586,6 +648,7 @@ def historico_chamado(id):
 
 @app.route('/chamados/<int:id>', methods=['DELETE'])
 def deletar_chamado(id):
+    exigir_admin()
     apagadas = 0
     with cursor_db(commit=True) as cur:
         cur.execute('DELETE FROM historico_status_chamado WHERE id_chamado = %s', (id,))
@@ -906,10 +969,15 @@ _OBJETOS_ESPERADOS = {
     'PROCEDURE': sorted({c['objeto']['nome'] for c in consultas.CONSULTAS if c['objeto']['tipo'] == 'procedure'}
                         | {'sp_alterar_status_chamado', 'sp_sincronizar_equipamento',
                            'sp_promover_admin', 'sp_remover_usuario',
-                           'sp_transferir_equipamento', 'sp_historico_equipamento'}),
+                           'sp_transferir_equipamento', 'sp_historico_equipamento',
+                           'sp_abrir_chamado', 'sp_encerrar_chamado', 'sp_iniciar_manutencao',
+                           'sp_concluir_manutencao', 'sp_iniciar_movimentacao',
+                           'sp_concluir_movimentacao', 'sp_cancelar_movimentacao',
+                           'sp_garantir_setor', 'sp_garantir_categoria'}),
     'FUNCTION': ['fn_chamados_ativos_equipamento', 'fn_equipamento_inativo', 'fn_usuario_eh_admin', 'fn_manutencoes_em_andamento', 'fn_total_vinculos_usuario',
                  'fn_custo_total_chamado', 'fn_custo_total_manutencao', 'fn_verificar_disponibilidade',
-                 'fn_total_chamados_equipamento'],
+                 'fn_total_chamados_equipamento', 'fn_validar_cpf', 'fn_classificar_prioridade',
+                 'fn_equipamento_em_movimentacao', 'fn_idade_equipamento_anos', 'fn_admin_tem_permissao'],
 }
 
 
@@ -927,7 +995,7 @@ def _objetos_faltando():
     faltam += [n for n in _OBJETOS_ESPERADOS['VIEW'] if n not in views]
     faltam += [n for n in _OBJETOS_ESPERADOS['PROCEDURE'] if ('PROCEDURE', n) not in existentes]
     faltam += [n for n in _OBJETOS_ESPERADOS['FUNCTION'] if ('FUNCTION', n) not in existentes]
-    if triggers < 11:
+    if triggers < 28:
         faltam.append('triggers (triggers.sql)')
     return faltam
 
@@ -942,7 +1010,7 @@ def _conferir_conexao_ao_subir():
         faltam = _objetos_faltando()
         if faltam:
             print(f"✖ Faltam {len(faltam)} objeto(s) no banco: {', '.join(faltam[:6])}{' ...' if len(faltam) > 6 else ''}. "
-                  "Execute no MySQL, nesta ordem: functions.sql, procedures.sql, triggers.sql, views.sql")
+                  "Execute no MySQL, nesta ordem: functions.sql, views.sql, procedures.sql, triggers.sql")
         else:
             print('✔ Views, functions, procedures e triggers do banco encontradas')
     except mysql.connector.Error as e:

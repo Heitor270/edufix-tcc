@@ -687,7 +687,7 @@ function formatarStatus(status) {
         aberto: 'Aberto', em_analise: 'Em Análise', em_execucao: 'Em Execução',
         concluido: 'Concluído', cancelado: 'Cancelado',
         disponivel: 'Disponível', em_uso: 'Em Uso',
-        em_manutencao: 'Em Manutenção', inativo: 'Inativo',
+        em_manutencao: 'Em Manutenção', inativo: 'Inativo', em_transito: 'Em Trânsito',
         otimo: 'Ótimo', bom: 'Bom', regular: 'Regular',
         ruim: 'Ruim', inutilizavel: 'Inutilizável'
     };
@@ -695,7 +695,7 @@ function formatarStatus(status) {
 }
 
 function formatarPrioridade(p) {
-    return { baixa:'Baixa', media:'Média', alta:'Alta', critica:'Crítica' }[p] || p;
+    return { baixa:'Baixa', media:'Média', alta:'Alta', critica:'Crítica', automatica:'Automática' }[p] || p;
 }
 
 function formatarData(d) {
@@ -741,6 +741,31 @@ async function carregarDashboard() {
             `).join('');
         }
     } catch (e) { /* o aviso de erro já foi exibido acima */ }
+
+    carregarAlertas();
+}
+
+// Alertas operacionais: calculados no banco (view vw_alertas_operacionais)
+async function carregarAlertas() {
+    const el = document.getElementById('lista-alertas');
+    if (!el) return;
+    try {
+        const alertas = await api('/alertas');
+        if (!alertas.length) {
+            el.className = 'recent-empty';
+            el.innerHTML = '<span class="recent-ok">Tudo em ordem.</span> Nenhum alerta no momento.';
+            return;
+        }
+        el.className = '';
+        el.innerHTML = alertas.map(a => `
+            <div class="recent-item">
+                <span class="badge alerta-tipo alerta-${esc(String(a.tipo).toLowerCase().replace(/\s+/g, '_'))}">${esc(a.tipo)}</span>
+                <span class="recent-descricao" title="${esc(a.alerta)}">${esc(a.alerta)}</span>
+            </div>`).join('');
+    } catch (e) {
+        el.className = 'recent-empty';
+        el.textContent = 'Não foi possível carregar os alertas.';
+    }
 }
 
 // ── GRÁFICOS (Chart.js) ───────────────────────
@@ -1013,7 +1038,7 @@ function renderizarTabela(lista) {
             <td>${esc(eq.categoria) || '—'}</td>
             <td>${esc(eq.localizacao) || '—'}</td>
             <td>${esc(formatarStatus(eq.estado_conservacao))}</td>
-            <td><span class="badge status-${esc(eq.status)}">${esc(formatarStatus(eq.status))}</span></td>
+            <td><span class="badge status-${esc(eq.status)}">${esc(formatarStatus(eq.status))}</span>${eq.em_movimentacao ? ' <span class="badge status-em_transito" title="Transferência em andamento">Em trânsito</span>' : ''}</td>
             <td class="celula-acoes">
                 <button class="btn-acao" onclick="detalhesEquipamento(${Number(eq.id_equipamento)})">Detalhes</button>
                 <button class="btn-acao" onclick="editarEquipamento(${Number(eq.id_equipamento)})">Editar</button>
@@ -1113,8 +1138,34 @@ function nomeEquipamentoChamado(c) {
 const STATUS_CHAMADO_FLUXO = ['aberto', 'em_analise', 'em_execucao'];
 const CHAMADO_FINALIZADO = ['concluido', 'cancelado'];
 
+// Mesma tabela do banco (function fn_transicao_status_valida) e da classe HistoricoStatusChamado:
+// o seletor só oferece o que o banco vai aceitar.
+const TRANSICOES_CHAMADO = {
+    aberto:      ['em_analise', 'em_execucao', 'concluido', 'cancelado'],
+    em_analise:  ['aberto', 'em_execucao', 'concluido', 'cancelado'],
+    em_execucao: ['em_analise', 'concluido', 'cancelado'],
+    concluido:   ['aberto'],
+    cancelado:   ['aberto'],
+};
+
 function acoesChamado(c) {
     const id = Number(c.id_chamado);
+    const logado = obterUsuario();
+    const admin = ehAdmin();
+    const meu = !!logado && Number(c.id_usuario) === Number(logado.id_usuario);
+
+    // Usuário comum: só acompanha (histórico), edita o próprio chamado e cancela o próprio chamado ainda "aberto".
+    // Mudar status, finalizar, reabrir e remover são do administrador (o banco também confere).
+    if (!admin) {
+        return `
+            <div class="chamado-acoes">
+                <div class="chamado-acoes-secundarias">
+                    <button type="button" class="chamado-link" data-id="${id}" data-acao="historico">Histórico</button>
+                    ${meu ? `<button type="button" class="chamado-link" data-id="${id}" data-acao="editar">Editar</button>` : ''}
+                    ${meu && c.status === 'aberto' ? `<button type="button" class="chamado-link" data-id="${id}" data-acao="cancelar">Cancelar</button>` : ''}
+                </div>
+            </div>`;
+    }
 
     if (CHAMADO_FINALIZADO.includes(c.status)) {
         // Já fechado: só resta reabrir ou remover de vez
@@ -1129,12 +1180,13 @@ function acoesChamado(c) {
             </div>`;
     }
 
-    // Em andamento: seletor pro fluxo + finalizar em destaque, cancelar/remover discretos
+    // Em andamento: seletor pro fluxo (só transições válidas) + finalizar em destaque, cancelar/remover discretos
+    const opcoes = STATUS_CHAMADO_FLUXO.filter(op => op === c.status || (TRANSICOES_CHAMADO[c.status] || []).includes(op));
     return `
         <div class="chamado-acoes">
             <div class="chamado-acoes-principais">
                 <select class="chamado-status-select" data-id="${id}" data-atual="${esc(c.status)}">
-                    ${STATUS_CHAMADO_FLUXO.map(op =>
+                    ${opcoes.map(op =>
                         `<option value="${op}" ${op === c.status ? 'selected' : ''}>${esc(formatarStatus(op))}</option>`
                     ).join('')}
                 </select>
@@ -1244,6 +1296,9 @@ async function abrirChamado() {
     if (!descricao) {
         mostrarErroCampo('descricao-chamado', 'A descrição do problema é obrigatória.');
         valido = false;
+    } else if (descricao.length < 10) {
+        mostrarErroCampo('descricao-chamado', 'Descreva o problema com pelo menos 10 caracteres.');
+        valido = false;
     }
 
     if (!valido) return;
@@ -1258,10 +1313,12 @@ async function abrirChamado() {
             return;
         }
 
-        await api('/chamados', {
+        const r = await api('/chamados', {
             corpo: { id_usuario: usuario.id_usuario, id_equipamento: eq.id_equipamento, prioridade, descricao_problema: descricao }
         });
-        mostrarToast('Chamado aberto com sucesso!', 'sucesso');
+        mostrarToast(prioridade === 'automatica' && r.prioridade
+            ? `Chamado aberto com prioridade ${formatarPrioridade(r.prioridade)} (sugerida pelo sistema).`
+            : 'Chamado aberto com sucesso!', 'sucesso');
         document.getElementById('patrimonio-chamado').value = '';
         document.getElementById('descricao-chamado').value  = '';
         carregarChamados();

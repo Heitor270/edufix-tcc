@@ -472,6 +472,19 @@ tr:hover td { background: #f8fafc; }
 .status-em_uso       { background: #dbeafe; color: #1d4ed8; }
 .status-em_manutencao{ background: #ffedd5; color: #9a3412; }
 .status-inativo      { background: #f1f5f9; color: #64748b; }
+.status-em_transito  { background: #ede9fe; color: #6d28d9; }
+
+/* alertas operacionais (dashboard) */
+.alerta-tipo         { background: #f1f5f9; color: #475569; min-width: 118px; text-align: center; }
+.alerta-critico      { background: #fee2e2; color: #b91c1c; }
+.alerta-sla          { background: #ffedd5; color: #9a3412; }
+.alerta-reincidencia { background: #fef9c3; color: #854d0e; }
+.alerta-manutencao_parada { background: #ffedd5; color: #9a3412; }
+.alerta-em_transito  { background: #ede9fe; color: #6d28d9; }
+.recent-ok           { color: #16a34a; font-weight: 600; }
+[data-theme="dark"] .recent-ok { color: #4ade80; }
+.aviso-campo { background: rgba(245,158,11,.12); color: #b45309; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; margin: 4px 0 14px; line-height: 1.45; }
+[data-theme="dark"] .aviso-campo { color: #fbbf24; }
 
 .prioridade-baixa  { background: #f1f5f9; color: #475569; }
 .prioridade-media  { background: #dbeafe; color: #1d4ed8; }

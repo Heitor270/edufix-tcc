@@ -132,7 +132,11 @@ const somenteDecimal = v => v.replace(/[^\d.,]/g, '');
 
 const OPCOES_CATEGORIA = [['Informatica', 'Informática'], ['Mobiliario', 'Mobiliário'], ['Climatizacao', 'Climatização'],
                           ['Eletrodomestico', 'Eletrodoméstico'], ['Outro', 'Outro']];
-const OPCOES_STATUS_EQUIP = ['disponivel', 'em_uso', 'em_manutencao', 'inativo'].map(v => [v, formatarStatus(v)]);
+// "Em manutenção" não é escolhido na mão: o banco define esse status quando existe uma manutenção em andamento
+const OPCOES_STATUS_EQUIP = ['disponivel', 'em_uso', 'inativo'].map(v => [v, formatarStatus(v)]);
+const opcoesStatusEquip = atual => atual === 'em_manutencao'
+    ? [...OPCOES_STATUS_EQUIP, ['em_manutencao', formatarStatus('em_manutencao')]]
+    : OPCOES_STATUS_EQUIP;
 const OPCOES_CONSERVACAO = ['otimo', 'bom', 'regular', 'ruim', 'inutilizavel'].map(v => [v, formatarStatus(v)]);
 const OPCOES_PRIORIDADE = ['baixa', 'media', 'alta', 'critica'].map(v => [v, formatarPrioridade(v)]);
 
@@ -155,11 +159,18 @@ async function detalhesEquipamento(id) {
                     ['Nº do patrimônio', esc(e.numero_patrimonio)],
                     ['Categoria', esc((OPCOES_CATEGORIA.find(([v]) => v === e.categoria) || [, e.categoria])[1])],
                     ['Localização', esc(e.localizacao)],
+                    ['Setor', esc(e.setor)],
                     ['Conservação', esc(formatarStatus(e.estado_conservacao))],
-                    ['Status', `<span class="badge status-${esc(e.status)}">${esc(formatarStatus(e.status))}</span>`],
+                    ['Status', `<span class="badge status-${esc(e.status)}">${esc(formatarStatus(e.status))}</span>` +
+                        (e.em_movimentacao ? ' <span class="badge status-em_transito">Em trânsito</span>' : '')],
                     ['Aquisição', esc(formatarData(e.data_aquisicao))],
+                    ['Idade', e.idade_anos == null ? '' : esc(String(e.idade_anos).replace('.', ',') + ' anos')],
                     ['Descrição', esc(e.descricao)],
                 ]) +
+                (e.em_movimentacao && e.movimentacao
+                    ? `<p class="aviso-campo">Em trânsito: <strong>${esc(e.movimentacao.setor_origem || '—')}</strong> → <strong>${esc(e.movimentacao.setor_destino)}</strong>,
+                       iniciada em ${esc(formatarDataHora(e.movimentacao.data_inicio))} por ${esc(e.movimentacao.responsavel)}.</p>`
+                    : '') +
                 `<h3 class="modal-subtitulo">Indicadores calculados no banco <small>(functions)</small></h3>` +
                 gradeDetalhes([
                     ['Custo total de manutenção', esc(formatarMoeda(e.custo_total_manutencao))],
@@ -168,10 +179,69 @@ async function detalhesEquipamento(id) {
                 ]),
             botoes: [
                 { rotulo: 'Editar', tipo: 'primario', aoClicar: () => editarEquipamento(id) },
+                ...(ehAdmin() ? [{ rotulo: e.em_movimentacao ? 'Transferência…' : 'Transferir', aoClicar: () => transferirEquipamento(e) }] : []),
                 { rotulo: 'Fechar', aoClicar: fecharModal },
             ],
         });
     } catch (err) { mostrarToast(err.message, 'erro'); }
+}
+
+/** Transferência de bem entre setores, em duas etapas (iniciar → concluir/cancelar). Só administrador. */
+async function transferirEquipamento(e) {
+    const chamar = async (corpo, btn, msgErroBtn) => {
+        definirCarregando(btn, true, 'Aguarde...');
+        try {
+            const r = await api(`/equipamentos/${e.id_equipamento}/movimentacao`, { corpo });
+            mostrarToast(r.mensagem, 'sucesso');
+            fecharModal();
+            if (typeof carregarEquipamentos === 'function' && document.getElementById('corpo-tabela')) carregarEquipamentos();
+        } catch (err) {
+            mostrarToast(err.message, 'erro');
+            definirCarregando(btn, false);
+        }
+    };
+
+    if (e.em_movimentacao) {
+        const mov = e.movimentacao || {};
+        return abrirModal({
+            titulo: `Transferência de ${e.nome}`,
+            conteudo: `<p>O bem está <strong>em trânsito</strong>: ${esc(mov.setor_origem || '—')} → <strong>${esc(mov.setor_destino || '—')}</strong>.</p>
+                       <p class="dica-campo">Concluir move o bem para o setor de destino. Cancelar mantém o bem onde estava.</p>`,
+            botoes: [
+                { rotulo: 'Voltar', aoClicar: fecharModal },
+                { rotulo: 'Cancelar transferência', tipo: 'perigo', aoClicar: btn => chamar({ acao: 'cancelar' }, btn) },
+                { rotulo: 'Concluir transferência', tipo: 'primario', aoClicar: btn => chamar({ acao: 'concluir' }, btn) },
+            ],
+        });
+    }
+
+    let setores = [];
+    try { setores = await api('/setores'); } catch { /* sem a lista, o campo continua aceitando texto */ }
+    const atual = e.setor || '';
+    const modal = abrirModal({
+        titulo: `Transferir ${e.nome}`,
+        conteudo:
+            `<p class="dica-campo" style="margin-bottom:12px">Setor atual: <strong>${esc(atual || '—')}</strong>. A transferência deixa o bem "em trânsito" até ser concluída.</p>` +
+            `<div class="form-group"><label for="tr-setor">Setor de destino *</label>
+                <input id="tr-setor" type="text" list="tr-lista-setores" maxlength="100" autocomplete="off" placeholder="Escolha ou digite um setor" />
+                <datalist id="tr-lista-setores">${setores.filter(s => s.setor !== atual).map(s => `<option value="${esc(s.setor)}"></option>`).join('')}</datalist>
+             </div>` +
+            campoForm({ id: 'tr-obs', rotulo: 'Observação', maxlength: 255, placeholder: 'Ex.: levar para a aula de sexta' }),
+        botoes: [
+            { rotulo: 'Cancelar', aoClicar: fecharModal },
+            {
+                rotulo: 'Iniciar transferência', tipo: 'primario',
+                aoClicar: btn => {
+                    limparTodosErros();
+                    const destino = val('tr-setor');
+                    if (destino.length < 2) return mostrarErroCampo('tr-setor', 'Informe o setor de destino.');
+                    if (destino.toLowerCase() === atual.toLowerCase()) return mostrarErroCampo('tr-setor', 'O destino é o próprio setor atual.');
+                    chamar({ acao: 'iniciar', setor_destino: destino, observacao: val('tr-obs') }, btn);
+                },
+            },
+        ],
+    });
+    return modal;
 }
 
 async function editarEquipamento(id) {
@@ -185,10 +255,15 @@ async function editarEquipamento(id) {
             campoForm({ id: 'ed-patrimonio', rotulo: 'Nº do patrimônio (não editável)', valor: e.numero_patrimonio, somenteLeitura: true }) +
             campoForm({ id: 'ed-nome', rotulo: 'Nome *', valor: e.nome, maxlength: 100 }) +
             campoForm({ id: 'ed-descricao', rotulo: 'Descrição', tipo: 'textarea', valor: e.descricao }) +
-            campoForm({ id: 'ed-localizacao', rotulo: 'Localização', valor: e.localizacao, maxlength: 100 }) +
+            campoForm({ id: 'ed-localizacao', rotulo: 'Localização', valor: e.localizacao, maxlength: 100,
+                       somenteLeitura: !!e.em_movimentacao || e.status === 'inativo',
+                       dica: e.em_movimentacao ? 'Bem em trânsito: conclua ou cancele a transferência para mudar o local.'
+                           : e.status === 'inativo' ? 'Bem inativo (baixado) não muda de local.'
+                           : 'Para mover o bem entre setores com registro, use "Transferir" nos detalhes.' }) +
             campoForm({ id: 'ed-categoria', rotulo: 'Categoria', opcoes: OPCOES_CATEGORIA, valor: e.categoria }) +
             campoForm({ id: 'ed-conservacao', rotulo: 'Estado de conservação', opcoes: OPCOES_CONSERVACAO, valor: e.estado_conservacao }) +
-            campoForm({ id: 'ed-status', rotulo: 'Status', opcoes: OPCOES_STATUS_EQUIP, valor: e.status }),
+            campoForm({ id: 'ed-status', rotulo: 'Status', opcoes: opcoesStatusEquip(e.status), valor: e.status,
+                       dica: e.status === 'em_manutencao' ? 'Em manutenção: o status muda sozinho quando a manutenção for concluída.' : '' }),
         botoes: [
             { rotulo: 'Cancelar', aoClicar: fecharModal },
             {
@@ -268,10 +343,14 @@ async function historicoChamado(id) {
     try {
         const hist = await api(`/chamados/${id}/historico`);
         const eventos = [];
-        if (c) eventos.push({ titulo: 'Chamado aberto', detalhe: '', data: c.data_abertura });
+        // O banco grava sozinho a linha de abertura (status anterior vazio). Chamados antigos não têm essa
+        // linha: nesse caso a abertura é montada a partir da data do chamado.
+        if (c && !hist.some(h => !h.status_anterior)) eventos.push({ titulo: 'Chamado aberto', detalhe: '', data: c.data_abertura });
         hist.forEach(h => eventos.push({
-            titulo: `${formatarStatus(h.status_anterior)} para ${formatarStatus(h.status_novo)}`,
-            detalhe: [h.usuario ? `por ${h.usuario}` : '', h.observacao || ''].filter(Boolean).join(' · '),
+            titulo: h.status_anterior
+                ? `${formatarStatus(h.status_anterior)} para ${formatarStatus(h.status_novo)}`
+                : `Chamado aberto (${formatarStatus(h.status_novo)})`,
+            detalhe: [h.usuario ? `por ${h.usuario}` : '', h.observacao && h.observacao !== 'Chamado aberto' ? h.observacao : ''].filter(Boolean).join(' · '),
             data: h.data_alteracao,
         }));
         const linha = ev => `
