@@ -42,7 +42,8 @@
 }
 
 [data-theme="dark"] body { background: var(--bg); }
-[data-theme="dark"] .auth-card input { background: var(--campo-escuro); color: var(--text-dark); border-color: var(--border); }
+[data-theme="dark"] .auth-card input,
+[data-theme="dark"] .auth-card select { background: var(--campo-escuro); color: var(--text-dark); border-color: var(--border); }
 [data-theme="dark"] .form-group input,
 [data-theme="dark"] .form-group select { background: var(--campo-escuro); color: var(--text-dark); border-color: var(--border); }
 [data-theme="dark"] .add-grid input { background: var(--campo-escuro); color: var(--text-dark); }
@@ -137,7 +138,8 @@ html {
 .auth-logo h1 { font-size: 26px; font-weight: 700; color: var(--text-dark); }
 .auth-logo p { font-size: 14px; color: var(--text-mid); margin-top: 6px; line-height: 1.5; }
 
-.auth-card input {
+.auth-card input,
+.auth-card select {
     width: 100%;
     padding: 13px 15px;
     margin: 6px 0;
@@ -151,7 +153,7 @@ html {
     outline: none;
 }
 
-.auth-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.auth-card input:focus, .auth-card select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .auth-card input::placeholder { color: var(--text-light); }
 
 .btn-primary {
@@ -916,19 +918,9 @@ tr:hover td { background: #f8fafc; }
 }
 
 /* ── ENTRADA DE PÁGINA ───────────────────────── */
-.auth-card {
-    animation: paginaEntrar 0.35s ease both;
-}
-
-/* Canva-style: fade rápido nas abas de navegação, sem movimento pra evitar scrollbar */
+/* A animação de entrada das páginas agora é a "TRANSIÇÃO ENTRE PÁGINAS" (no fim deste arquivo). */
 .main {
-    animation: paginaNav 0.2s ease-out both;
     overflow-x: hidden;
-}
-
-@keyframes paginaNav {
-    from { opacity: 0; }
-    to   { opacity: 1; }
 }
 
 /* Impede overflow durante qualquer animação */
@@ -950,11 +942,12 @@ tr:hover td { background: #f8fafc; }
     to { opacity: 0; transform: translateY(-10px); }
 }
 
-/* ── TRANSIÇÃO DE ABAS (relatórios) ─────────── */
-/* Classe adicionada via JS a cada troca de aba/filtro (removida e reaplicada,
-   pra reiniciar a animação) — mesma animação usada na troca de páginas inteiras. */
-.resultado-entrando {
-    animation: paginaEntrar 0.35s ease both;
+/* ── TRANSIÇÃO DE ABAS (relatórios, consultas) ── */
+/* Classe adicionada via JS a cada troca de aba (removida e reaplicada, pra reiniciar a animação).
+   É o mesmo efeito da troca de páginas (keyframes "pagina-entra", no fim deste arquivo). */
+.resultado-entrando,
+.troca-aba {
+    animation: pagina-entra var(--pg-entrada, 280ms) var(--pg-curva, cubic-bezier(0.36, 0.66, 0.04, 1)) both;
 }
 
 /* ── BOTÃO OCUPADO (enquanto a requisição roda) ─ */
@@ -1343,6 +1336,103 @@ html:not([data-theme="dark"]) .page-title { color: #0b2b2a; }
 /* itens só do administrador: ficam escondidos desde o primeiro desenho da página (sem "piscar") */
 html:not(.is-admin) [data-so-admin] { display: none !important; }
 
-/* checkboxes de permissões do administrador (modal "Nível") */
-.form-group .check-linha { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 13.5px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-dark); cursor: pointer; }
-.check-linha input { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+/* cadastro: escolha de perfil (pedido que o administrador aprova) */
+.rotulo-perfil { display: block; font-size: 12px; font-weight: 600; color: var(--text-mid); text-transform: uppercase; letter-spacing: .4px; margin: 10px 0 0; }
+.aviso-perfil { background: rgba(245,158,11,.12); color: #b45309; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; margin: 8px 0 4px; line-height: 1.45; }
+[data-theme="dark"] .aviso-perfil { color: #fbbf24; }
+.aviso-perfil[hidden] { display: none; }
+
+
+/* =========================================================
+   TRANSIÇÃO ENTRE PÁGINAS  (mesmo efeito do app Ionic / Material)
+   Entrada: aparece e sobe 40px em 280 ms, curva cubic-bezier(.36,.66,.04,1).
+   Voltar:  a página que sai desce 40px e some em 200 ms.
+   O menu lateral fica parado; só o conteúdo anima. A lógica está em transicao.js.
+   ========================================================= */
+:root {
+    --pg-desloc: 40px;
+    --pg-entrada: 280ms;
+    --pg-saida: 200ms;
+    --pg-curva: cubic-bezier(0.36, 0.66, 0.04, 1);
+    --pg-curva-saida: cubic-bezier(0.47, 0, 0.745, 0.715);
+}
+@keyframes pagina-entra {
+    from { opacity: 0.01; transform: translateY(var(--pg-desloc)); }
+    to   { opacity: 1;    transform: none; }
+}
+@keyframes pagina-sai {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 0; transform: translateY(var(--pg-desloc)); }
+}
+@keyframes pagina-some {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+
+/* O opt-in (@view-transition) é injetado pelo transicao.js, para valer já no nascimento da página. */
+
+/* Quem deixa "reduzir movimento" ligado no sistema (no Windows: Configurações > Acessibilidade >
+   Efeitos visuais > Efeitos de animação desligado) recebe só o fade, sem subir. Nunca fica sem efeito. */
+@media (prefers-reduced-motion: reduce) {
+    :root { --pg-desloc: 0px; --pg-entrada: 220ms; --pg-saida: 160ms; }
+}
+
+/* Página aberta sem transição (navegador sem suporte, atualizar a página, digitar o endereço):
+   só a página nova anima, ao carregar. As classes são postas pelo transicao.js. */
+.sem-vt .main,
+.sem-vt .auth-painel,
+.carga-direta .main,
+.carga-direta .auth-painel { animation: pagina-entra var(--pg-entrada) var(--pg-curva) both; }
+
+/* navegador COM view transitions entre páginas */
+.vt-ativa .main,
+.vt-ativa .auth-painel { view-transition-name: pagina; }
+.vt-ativa .sidebar     { view-transition-name: menu-lateral; }
+.vt-ativa .auth-hero   { view-transition-name: destaque; }
+
+/* o fundo e o menu só trocam de forma suave (ex.: o item ativo do menu) */
+::view-transition-group(root),
+::view-transition-group(menu-lateral),
+::view-transition-group(destaque) { animation-duration: 200ms; }
+
+/* ir para frente: a página antiga some rápido e a nova sobe e aparece */
+::view-transition-old(pagina),
+::view-transition-new(pagina) { mix-blend-mode: normal; }
+::view-transition-old(pagina) { animation: pagina-some 180ms ease-out both; }
+::view-transition-new(pagina) { animation: pagina-entra var(--pg-entrada) var(--pg-curva) both; }
+
+/* voltar no histórico: a página que sai desce e some por cima da que chega */
+html:active-view-transition-type(voltar)::view-transition-old(pagina) {
+    animation: pagina-sai var(--pg-saida) var(--pg-curva-saida) both;
+    z-index: 2;
+}
+html:active-view-transition-type(voltar)::view-transition-new(pagina) { animation: none; }
+
+
+/* =========================================================
+   TROCA DE TEMA (claro <-> escuro)
+   Uma transição só: o tema novo se abre em círculo a partir do botão (script.js > alternarTema).
+   Enquanto troca, as transições soltas de cor ficam congeladas, senão cada elemento muda no seu
+   tempo e a tela "pisca" (fundo mudando antes do texto, linhas de tabela ficando para trás).
+   ========================================================= */
+.trocando-tema *,
+.trocando-tema *::before,
+.trocando-tema *::after { transition: none !important; }
+
+/* o círculo e o recuo são animados pelo JS; aqui só desliga o fade padrão do navegador */
+html[data-tema-efeito="circulo"]::view-transition-old(root),
+html[data-tema-efeito="circulo"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html[data-tema-efeito="circulo"]::view-transition-old(root) { z-index: 1; }
+html[data-tema-efeito="circulo"]::view-transition-new(root) { z-index: 2; }
+
+/* reduzir movimento: fade rápido */
+html[data-tema-efeito="fade"]::view-transition-group(root) { animation-duration: 260ms; }
+
+/* o ícone (lua/sol) gira ao entrar */
+@keyframes icone-gira {
+    from { transform: rotate(-200deg) scale(0.3); opacity: 0; }
+    60%  { opacity: 1; }
+    to   { transform: rotate(0) scale(1); opacity: 1; }
+}
+.tema-girar svg { animation: icone-gira 700ms cubic-bezier(0.36, 0.66, 0.04, 1) both; transform-origin: 50% 50%; }
+@media (prefers-reduced-motion: reduce) { .tema-girar svg { animation-duration: 300ms; } }

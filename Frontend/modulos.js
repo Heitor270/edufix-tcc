@@ -592,11 +592,11 @@ function renderizarUsuarios() {
             <td>${esc(u.cpf) || '—'}</td>
             <td>${esc(u.telefone) || '—'}</td>
             <td><span class="badge tipo-${esc(u.tipo_usuario)}">${u.tipo_usuario === 'admin' ? 'Administrador' : 'Usuário'}</span>${
-                u.tipo_usuario === 'admin' && u.nivel_acesso ? ` <span class="badge">Nível ${Number(u.nivel_acesso)}</span>` : ''}</td>
+                u.perfil_solicitado && u.tipo_usuario !== 'admin' ? ` <span class="badge status-em_analise">Pediu: ${esc(ROTULO_PERFIL[u.perfil_solicitado] || u.perfil_solicitado)}</span>` : ''}</td>
             <td>${Number(u.chamados_abertos || 0)}</td>
             <td class="celula-acoes">
                 <button class="btn-acao" data-acao="editar" data-id="${Number(u.id_usuario)}">Editar</button>
-                ${u.tipo_usuario === 'admin' && u.nivel_acesso ? `<button class="btn-acao" data-acao="nivel" data-id="${Number(u.id_usuario)}">Nível</button>` : ''}
+                ${u.perfil_solicitado && u.tipo_usuario !== 'admin' ? `<button class="btn-acao" data-acao="pedido" data-id="${Number(u.id_usuario)}">Pedido</button>` : ''}
                 <button class="btn-danger" data-acao="remover" data-id="${Number(u.id_usuario)}">Remover</button>
             </td>
         </tr>`).join('');
@@ -610,7 +610,7 @@ function setupUsuarios() {
         if (!btn) return;
         const u = todosUsuarios.find(x => x.id_usuario === Number(btn.dataset.id));
         if (btn.dataset.acao === 'editar') formEditarUsuario(u);
-        if (btn.dataset.acao === 'nivel') formNivelAdmin(u);
+        if (btn.dataset.acao === 'pedido') formPedidoPerfil(u);
         if (btn.dataset.acao === 'remover') removerUsuario(u, btn);
     });
     carregarUsuarios();
@@ -695,70 +695,33 @@ function formEditarUsuario(u) {
     ligarConfirmacaoSenha('us-senha', 'us-senha2');
 }
 
-// Permissões que um administrador pode ter (iguais às da classe Admin e às conferidas no servidor).
-const PERMISSOES_ADMIN = [
-    ['gerenciar_usuarios',   'Gerenciar usuários (aba Usuários, níveis)'],
-    ['gerenciar_chamados',   'Gerenciar chamados (mudar status, excluir)'],
-    ['gerenciar_patrimonio', 'Gerenciar patrimônio (transferir bens)'],
-    ['emitir_relatorios',    'Emitir relatórios de usuários'],
-];
-// O que cada nível já garante sozinho (nível 3 em diante tem tudo).
-const PERMISSOES_DO_NIVEL = {
-    1: ['gerenciar_chamados', 'gerenciar_patrimonio'],
-    2: ['gerenciar_chamados', 'gerenciar_patrimonio', 'emitir_relatorios'],
-    3: PERMISSOES_ADMIN.map(p => p[0]), 4: PERMISSOES_ADMIN.map(p => p[0]), 5: PERMISSOES_ADMIN.map(p => p[0]),
-};
+const ROTULO_PERFIL = { administrador: 'Administrador' };
 
-function formNivelAdmin(u) {
-    const total = (u.permissoes || '').trim() === 'admin';
-    const extras = new Set((u.permissoes || '').split(',').map(x => x.trim()).filter(Boolean));
-    const modal = abrirModal({
-        titulo: `Nível de acesso — ${u.nome}`,
+/** Aprovar ou recusar o pedido de administrador feito ao se cadastrar. */
+function formPedidoPerfil(u) {
+    const decidir = async (btn, modal, acao) => {
+        definirCarregando(btn, true, acao === 'aprovar' ? 'Aprovando...' : 'Recusando...');
+        try {
+            const r = await api(`/usuarios/${u.id_usuario}/pedido-perfil`, { corpo: { acao } });
+            mostrarToast(r.mensagem || 'Pedido atualizado.', 'sucesso');
+            modal.fechar();
+            carregarUsuarios();
+        } catch (e) {
+            mostrarToast(e.message, 'erro');
+            definirCarregando(btn, false);
+        }
+    };
+    abrirModal({
+        titulo: `Pedido de administrador — ${u.nome}`,
         conteudo:
-            campoForm({ id: 'nv-nivel', rotulo: 'Nível (1 a 5)', valor: String(u.nivel_acesso || 1),
-                        opcoes: [1, 2, 3, 4, 5].map(n => [String(n), 'Nível ' + n]),
-                        dica: 'Nível 1: chamados e patrimônio. Nível 2: + relatórios. Nível 3 ou mais: tudo.' }) +
-            `<div class="form-group"><label>Permissões extras</label>
-                <label class="check-linha"><input type="checkbox" id="nv-total" ${total ? 'checked' : ''}> Todas as permissões (admin)</label>
-                ${PERMISSOES_ADMIN.map(([k, r]) =>
-                    `<label class="check-linha"><input type="checkbox" class="nv-perm" value="${esc(k)}" ${extras.has(k) ? 'checked' : ''}> ${esc(r)}</label>`).join('')}
-                <small class="dica-campo" id="nv-resumo"></small></div>`,
+            `<p class="aviso-campo"><strong>${esc(u.nome)}</strong> pediu o perfil de <strong>administrador</strong>
+             ao se cadastrar. Até você decidir, a conta funciona como usuário comum. Administrador pode tudo no sistema.</p>`,
         botoes: [
             { rotulo: 'Cancelar', aoClicar: fecharModal },
-            {
-                rotulo: 'Salvar', tipo: 'primario',
-                aoClicar: async (btn, modal) => {
-                    const todas = document.getElementById('nv-total').checked;
-                    const marcadas = [...document.querySelectorAll('.nv-perm:checked')].map(c => c.value);
-                    definirCarregando(btn, true, 'Salvando...');
-                    try {
-                        await api(`/admin/${u.id_usuario}`, {
-                            method: 'PUT',
-                            corpo: { nivel_acesso: Number(val('nv-nivel')), permissoes: todas ? 'admin' : marcadas.join(',') },
-                        });
-                        mostrarToast('Nível de acesso atualizado.', 'sucesso');
-                        modal.fechar();
-                        carregarUsuarios();
-                    } catch (e) {
-                        mostrarToast(e.message, 'erro');   // ex.: tirar de si mesmo a gestão de usuários (403/400)
-                        definirCarregando(btn, false);
-                    }
-                },
-            },
+            { rotulo: 'Recusar', aoClicar: (btn, modal) => decidir(btn, modal, 'recusar') },
+            { rotulo: 'Aprovar', tipo: 'primario', aoClicar: (btn, modal) => decidir(btn, modal, 'aprovar') },
         ],
     });
-    // resumo ao vivo do que o administrador poderá fazer
-    const resumo = () => {
-        const todas = document.getElementById('nv-total').checked;
-        document.querySelectorAll('.nv-perm').forEach(c => { c.disabled = todas; });
-        const efetivas = todas ? PERMISSOES_ADMIN.map(p => p[0]) : new Set([
-            ...PERMISSOES_DO_NIVEL[Number(val('nv-nivel'))],
-            ...[...document.querySelectorAll('.nv-perm:checked')].map(c => c.value)]);
-        const nomes = PERMISSOES_ADMIN.filter(p => [...efetivas].includes(p[0])).map(p => p[1].split(' (')[0]);
-        document.getElementById('nv-resumo').textContent = 'Poderá: ' + (nomes.join(', ') || 'nada');
-    };
-    modal.corpo.addEventListener('change', resumo);
-    resumo();
 }
 
 function formNovoUsuario() {
@@ -857,7 +820,7 @@ async function carregarCatalogo() {
 
     lista.addEventListener('click', ev => {
         const aba = ev.target.closest('.consulta-aba');
-        if (aba) return mostrarGrupoConsultas(aba.dataset.nivel);
+        if (aba) return mostrarGrupoConsultas(aba.dataset.nivel, true);
         const item = ev.target.closest('.consulta-item');
         if (item) selecionarConsulta(item.dataset.id);
     });
@@ -867,9 +830,18 @@ async function carregarCatalogo() {
 }
 
 // Mostra só as consultas do nível escolhido (abas), sem lista rolando
-function mostrarGrupoConsultas(nivel) {
+function mostrarGrupoConsultas(nivel, animar = false) {
     document.querySelectorAll('.consulta-aba').forEach(a => a.classList.toggle('ativa', a.dataset.nivel === nivel));
-    document.querySelectorAll('.consultas-grupo').forEach(g => { g.hidden = g.dataset.nivel !== nivel; });
+    document.querySelectorAll('.consultas-grupo').forEach(g => {
+        const mostrar = g.dataset.nivel === nivel;
+        const estavaOculto = g.hidden;
+        g.hidden = !mostrar;
+        if (animar && mostrar && estavaOculto) {          // só quando o usuário troca de aba, não ao carregar a página
+            g.classList.remove('troca-aba');
+            void g.offsetWidth;                            // reinicia a animação
+            g.classList.add('troca-aba');
+        }
+    });
 }
 
 function campoParametro(p) {

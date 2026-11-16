@@ -35,7 +35,7 @@ class Admin(Usuario):
         telefone: str,
         cpf: str,
         nivel_acesso: int = 1,
-        permissoes: str = "",
+        permissoes: str = PERMISSAO_TOTAL,
         ativo: bool = True,
         data_cadastro: Optional[date] = None,
         ultimo_login: Optional[date] = None,
@@ -78,6 +78,34 @@ class Admin(Usuario):
             raise PermissionError("Administrador inativo.")
         if not self.possui_permissao(permissao):
             raise PermissionError(f"Permissao necessaria: {permissao} (nivel {self.nivel_acesso}).")
+
+    # ------------------------------------------------------- pedido de perfil
+    def aprovarPerfil(self, alvo: Usuario) -> "Admin":
+        """Aprova o pedido de administrador feito no cadastro: devolve o Admin que passa a
+        representar a pessoa (o administrador pode tudo). Precisa de 'gerenciar_usuarios';
+        ninguem aprova o proprio pedido."""
+        self._exigir("gerenciar_usuarios")
+        if alvo is self:
+            raise PermissionError("Voce nao pode aprovar o seu proprio pedido.")
+        if isinstance(alvo, Admin):
+            raise ValueError(f"{alvo.nome} ja e administrador.")
+        if not alvo.perfil_solicitado:
+            raise ValueError(f"{alvo.nome} nao tem pedido pendente.")
+        novo = Admin(alvo.id_usuario, alvo.nome, alvo.senha, alvo.email, alvo.telefone, alvo.cpf,
+                     ativo=alvo.ativo, data_cadastro=alvo.data_cadastro, ultimo_login=alvo.ultimo_login)
+        novo._chamados = alvo._chamados
+        alvo.perfil_solicitado = None
+        return novo
+
+    def recusarPerfil(self, alvo: Usuario) -> str:
+        """Recusa o pedido: a conta continua como usuario comum."""
+        self._exigir("gerenciar_usuarios")
+        if alvo is self:
+            raise PermissionError("Voce nao pode decidir o seu proprio pedido.")
+        if not alvo.perfil_solicitado:
+            raise ValueError(f"{alvo.nome} nao tem pedido pendente.")
+        alvo.perfil_solicitado = None
+        return f"Pedido de {alvo.nome} recusado."
 
     # ------------------------------------------------------- metodos UML
     def gerenciarUsuarios(

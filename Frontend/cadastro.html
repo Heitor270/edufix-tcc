@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduFix — Cadastro</title>
     <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <script src="transicao.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="auth-body">
@@ -35,6 +36,12 @@
             <input type="password" id="confirmar_senha" placeholder="Confirmar senha" autocomplete="new-password" />
             <input type="text" id="cpf" placeholder="CPF" />
             <input type="text" id="telefone" placeholder="Telefone" />
+            <label class="rotulo-perfil" for="perfil">Seu perfil</label>
+            <select id="perfil">
+                <option value="usuario">Usuário (professor, coordenador, funcionário)</option>
+                <option value="administrador">Administrador</option>
+            </select>
+            <p class="aviso-perfil" id="aviso-perfil" hidden>O perfil de administrador precisa da aprovação de outro administrador. Até lá, sua conta funciona como usuário comum.</p>
             <button class="btn-primary" onclick="cadastrar()">Cadastrar</button>
             <p class="erro" id="erro"></p>
 
@@ -46,5 +53,11 @@
 </div>
 
 <script src="script.js"></script>
+<script>
+    // mostra o aviso de aprovação quando a pessoa escolhe técnico ou administrador
+    document.getElementById('perfil').addEventListener('change', e => {
+        document.getElementById('aviso-perfil').hidden = e.target.value === 'usuario';
+    });
+</script>
 </body>
 </html>

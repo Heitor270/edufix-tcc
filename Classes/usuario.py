@@ -20,6 +20,10 @@ if TYPE_CHECKING:  # evita import circular
     from chamado import Chamado
 
 
+# Perfil que a pessoa pode PEDIR no cadastro (a conta nasce comum; um admin aprova ou recusa).
+PERFIS_SOLICITAVEIS = ("administrador",)
+
+
 class Usuario:
     ITERACOES_HASH = 600_000
     ESPECIAIS_SENHA = '!@#$%^&*()-_,.?":{}|<>'
@@ -37,6 +41,7 @@ class Usuario:
         ativo: bool = True,
         data_cadastro: Optional[date] = None,
         ultimo_login: Optional[date] = None,
+        perfil_solicitado: Optional[str] = None,
     ):
         self.id_usuario = id_usuario
         self.nome = self._validar_nome(nome)
@@ -46,6 +51,7 @@ class Usuario:
         self.ativo = bool(ativo)
         self.data_cadastro = data_cadastro or date.today()
         self.ultimo_login = ultimo_login
+        self.perfil_solicitado = self._validar_perfil_pedido(perfil_solicitado)
         if senha.startswith("pbkdf2:"):          # veio do banco, ja e hash
             self.senha = senha
         else:
@@ -54,6 +60,14 @@ class Usuario:
         self._chamados: list = []                 # lado "0..N" da associacao
 
     # ------------------------------------------------- validacoes (estaticas)
+    @staticmethod
+    def _validar_perfil_pedido(perfil: Optional[str]) -> Optional[str]:
+        if perfil in (None, "", "usuario"):
+            return None
+        if perfil not in PERFIS_SOLICITAVEIS:
+            raise ValueError(f"Perfil invalido. Use: {', '.join(PERFIS_SOLICITAVEIS)}.")
+        return perfil
+
     @staticmethod
     def _validar_nome(nome: str) -> str:
         nome = " ".join((nome or "").split())
@@ -205,7 +219,7 @@ class Usuario:
                 "telefone": self.telefone, "ativo": self.ativo,
                 "data_cadastro": self.data_cadastro.isoformat(),
                 "ultimo_login": self.ultimo_login.isoformat() if self.ultimo_login else None,
-                "admin": self.eh_admin}
+                "admin": self.eh_admin, "perfil_solicitado": self.perfil_solicitado}
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} #{self.id_usuario} {self.nome!r} ativo={self.ativo}>"

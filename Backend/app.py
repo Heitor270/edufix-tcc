@@ -239,32 +239,10 @@ def validar_email(email):
     return email
 
 
-# Permissões do administrador (mesmas da classe Admin). O nível (1 a 5) já garante algumas;
-# a coluna admin.permissoes pode somar outras, ou valer 'admin' = todas.
-PERMISSOES_VALIDAS = ('gerenciar_usuarios', 'gerenciar_chamados', 'gerenciar_patrimonio', 'emitir_relatorios')
-PERMISSOES_DO_NIVEL = {
-    1: ('gerenciar_chamados', 'gerenciar_patrimonio'),
-    2: ('gerenciar_chamados', 'gerenciar_patrimonio', 'emitir_relatorios'),
-    3: PERMISSOES_VALIDAS, 4: PERMISSOES_VALIDAS, 5: PERMISSOES_VALIDAS,
-}
-
-
-def permissoes_do_admin(id_usuario):
-    """Conjunto de permissões efetivas de um administrador (vazio se não for admin)."""
-    adm = consultar('SELECT nivel_acesso, permissoes FROM admin WHERE id_admin = %s', (id_usuario,), um=True)
-    if not adm:
-        return frozenset()
-    texto = (adm['permissoes'] or '').strip()
-    if texto == 'admin':
-        return frozenset(PERMISSOES_VALIDAS)
-    extras = {p.strip() for p in texto.split(',') if p.strip()}
-    return frozenset(extras | set(PERMISSOES_DO_NIVEL.get(adm['nivel_acesso'], ())))
-
-
-def exigir_admin(permissao=None):
-    """Só administrador passa (e, se for informada, só quem tiver aquela permissão). O front manda o id
-    de quem está logado no cabeçalho X-Usuario-Id e aqui o perfil é conferido no banco
-    (não dá para confiar só no que o navegador diz ser)."""
+def exigir_admin():
+    """Só administrador passa; o administrador pode tudo. O front manda o id de quem está logado no
+    cabeçalho X-Usuario-Id e aqui o perfil é conferido no banco (não dá para confiar só no que o
+    navegador diz ser)."""
     bruto = request.headers.get('X-Usuario-Id', '').strip()
     if not bruto.isdigit():
         raise ErroRequisicao('Faça login para continuar.', 401)
@@ -274,8 +252,6 @@ def exigir_admin(permissao=None):
         raise ErroRequisicao('Faça login para continuar.', 401)
     if not quem['eh_admin']:
         raise ErroRequisicao('Acesso restrito a administradores.', 403)
-    if permissao and permissao not in permissoes_do_admin(quem['id_usuario']):
-        raise ErroRequisicao(f'Seu nível de administrador não tem a permissão "{permissao}".', 403)
     return quem['id_usuario']
 
 
@@ -453,17 +429,32 @@ def login():
 def cadastrar():
     dados = corpo('nome', 'email', 'senha', 'cpf')
     dados['email'] = validar_email(dados['email'])
+    # Quem se cadastra NUNCA vira admin sozinho: a conta nasce comum. Se a pessoa disser que é técnico
+    # ou administrador, isso fica só como PEDIDO, que um administrador aprova ou recusa na aba Usuários.
+    perfil = dados.get('perfil') or 'usuario'
+    exigir_em(perfil, ('usuario', 'administrador'), 'perfil')
+    pedido = None if perfil == 'usuario' else perfil
     garantir_banco()
     try:
-        executar("""
-            INSERT INTO usuario (nome, email, senha, cpf, telefone)
-            VALUES (%s, %s, %s, %s, %s)
+        _, novo_id = executar("""
+            INSERT INTO usuario (nome, email, senha, cpf, telefone, perfil_solicitado)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (dados['nome'], dados['email'], gerar_hash(dados['senha']),
-              dados['cpf'], dados.get('telefone', '')))
+              dados['cpf'], dados.get('telefone', ''), pedido))
     except mysql.connector.IntegrityError as e:
         if e.errno == 1062:
             return jsonify({'sucesso': False, 'mensagem': 'Email ou CPF já cadastrado!'}), 409
         raise
+    # Primeiro acesso do sistema: sem nenhum administrador ninguém poderia aprovar pedidos. Por isso, só
+    # enquanto a tabela admin estiver vazia, a primeira conta cadastrada já nasce administradora.
+    if not consultar('SELECT 1 AS x FROM admin LIMIT 1', um=True):
+        chamar_procedure('sp_promover_admin', [novo_id, 1, 'admin'], commit=True)
+        executar('UPDATE usuario SET perfil_solicitado = NULL WHERE id_usuario = %s', (novo_id,))
+        return ok('Primeiro usuário do sistema: sua conta foi criada como administrador.',
+                  primeiro_admin=True)
+    if pedido:
+        return ok('Usuário cadastrado! Seu pedido de perfil fica pendente até um administrador aprovar; '
+                  'até lá você usa o sistema como usuário comum.')
     return ok('Usuário cadastrado!')
 
 
@@ -578,7 +569,7 @@ def movimentar_equipamento(id):
     """Transferência em duas etapas (o bem fica "em trânsito" no meio).
     acao = iniciar (exige setor_destino) | concluir | cancelar. Só administrador; as regras
     (bem inativo/em manutenção não se move, uma movimentação por vez...) estão nas procedures/triggers."""
-    exigir_admin('gerenciar_patrimonio')
+    exigir_admin()
     dados = corpo('acao')
     exigir_em(dados['acao'], ('iniciar', 'concluir', 'cancelar'), 'acao')
     quem = _id_quem_logou()
@@ -676,9 +667,9 @@ def atualizar_status_chamado(id):
     exigir_em(dados['status'], STATUS_CHAMADO, 'status')
 
     # Regra de perfil (conferida aqui, no servidor, e não só na interface):
-    #  - administrador (com a permissão gerenciar_chamados): qualquer transição válida;
+    #  - administrador: qualquer transição válida;
     #  - usuário comum: apenas CANCELAR um chamado SEU que ainda esteja "aberto".
-    if not (quem['eh_admin'] and 'gerenciar_chamados' in permissoes_do_admin(quem['id_usuario'])):
+    if not quem['eh_admin']:
         chamado = consultar('SELECT id_usuario, status FROM chamado WHERE id_chamado = %s', (id,), um=True)
         if not chamado:
             raise ErroRequisicao('Chamado não encontrado', 404)
@@ -708,7 +699,7 @@ def historico_chamado(id):
 
 @app.route('/chamados/<int:id>', methods=['DELETE'])
 def deletar_chamado(id):
-    exigir_admin('gerenciar_chamados')
+    exigir_admin()
     apagadas = 0
     with cursor_db(commit=True) as cur:
         cur.execute('DELETE FROM historico_status_chamado WHERE id_chamado = %s', (id,))
@@ -818,20 +809,18 @@ def deletar_manutencao(id):
 
 # ─── USUÁRIOS (CRUD) ───────────────────────
 
-CAMPOS_USUARIO = ('u.id_usuario, u.nome, u.email, u.cpf, u.telefone, u.tipo_usuario, '
+CAMPOS_USUARIO = ('u.id_usuario, u.nome, u.email, u.cpf, u.telefone, u.tipo_usuario, u.perfil_solicitado, '
                   'u.ativo, u.data_cadastro, u.ultimo_login')
 
 
 @app.route('/usuarios', methods=['GET'])
 def listar_usuarios():
     """Nunca devolve a senha. ?busca= filtra por nome ou e-mail."""
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     busca = request.args.get('busca', '').strip()
     sql = f"""SELECT {CAMPOS_USUARIO},
-                     a.nivel_acesso, a.permissoes,
                      fn_total_chamados_abertos(u.id_usuario) AS chamados_abertos
-              FROM usuario u
-              LEFT JOIN admin a ON a.id_admin = u.id_usuario"""
+              FROM usuario u"""
     params = ()
     if busca:
         sql += ' WHERE u.nome LIKE %s OR u.email LIKE %s'
@@ -841,7 +830,7 @@ def listar_usuarios():
 
 @app.route('/usuarios/<int:id>', methods=['GET'])
 def detalhar_usuario(id):
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     usuario = consultar(f'SELECT {CAMPOS_USUARIO} FROM usuario u WHERE u.id_usuario = %s', (id,), um=True)
     if not usuario:
         raise ErroRequisicao('Usuário não encontrado', 404)
@@ -851,7 +840,7 @@ def detalhar_usuario(id):
 @app.route('/usuarios/<int:id>', methods=['PUT'])
 def editar_usuario(id):
     """Edita dados do usuário. 'senha' é opcional (só troca se vier preenchida)."""
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     dados = corpo('nome', 'email')
     dados['email'] = validar_email(dados['email'])
     tipo = dados.get('tipo_usuario', 'usuario')
@@ -876,6 +865,7 @@ def editar_usuario(id):
                 if not cur.fetchone():
                     cur.execute("INSERT INTO admin (id_admin, nivel_acesso, permissoes) VALUES (%s, 1, 'admin')",
                                 (id,))
+                cur.execute('UPDATE usuario SET perfil_solicitado = NULL WHERE id_usuario=%s', (id,))
             else:
                 cur.execute('DELETE FROM admin WHERE id_admin=%s', (id,))
     except mysql.connector.IntegrityError as e:
@@ -887,7 +877,7 @@ def editar_usuario(id):
 
 @app.route('/usuarios/<int:id>', methods=['DELETE'])
 def deletar_usuario(id):
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     # regra de integridade dentro do banco: 404 se não existe, 409 se tem chamados/histórico
     chamar_procedure('sp_remover_usuario', [id], commit=True)
     return ok('Usuário removido!')
@@ -897,57 +887,37 @@ def deletar_usuario(id):
 
 @app.route('/admin', methods=['POST'])
 def promover_admin():
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     dados = corpo('id_usuario')
-    try:
-        nivel = int(dados.get('nivel_acesso', 1))
-    except (TypeError, ValueError):
-        nivel = 0
-    if not 1 <= nivel <= 5:
-        raise ErroRequisicao('O nível de acesso deve ser de 1 a 5.')
-    permissoes = validar_permissoes(dados.get('permissoes', 'admin'))
-    chamar_procedure('sp_promover_admin', [dados['id_usuario'], nivel, permissoes], commit=True)
+    chamar_procedure('sp_promover_admin', [dados['id_usuario'], 1, 'admin'], commit=True)
     return ok('Usuário promovido a admin!')
 
 
-def validar_permissoes(texto):
-    """'admin' = todas; senão, lista separada por vírgula só com permissões que existem ('' = só as do nível)."""
-    texto = (texto or '').strip()
-    if texto == 'admin':
-        return texto
-    lista = [p.strip() for p in texto.split(',') if p.strip()]
-    invalidas = [p for p in lista if p not in PERMISSOES_VALIDAS]
-    if invalidas:
-        raise ErroRequisicao('Permissão inválida: ' + ', '.join(invalidas))
-    return ','.join(lista)
-
-
-@app.route('/admin/<int:id>', methods=['PUT'])
-def alterar_nivel_admin(id):
-    """Muda o nível (1 a 5) e as permissões extras de um administrador."""
-    quem = exigir_admin('gerenciar_usuarios')
-    dados = corpo('nivel_acesso')
-    try:
-        nivel = int(dados['nivel_acesso'])
-    except (TypeError, ValueError):
-        nivel = 0
-    if not 1 <= nivel <= 5:
-        raise ErroRequisicao('O nível de acesso deve ser de 1 a 5.')
-    permissoes = validar_permissoes(dados.get('permissoes', ''))
-    if not consultar('SELECT 1 AS x FROM admin WHERE id_admin = %s', (id,), um=True):
-        raise ErroRequisicao('Esse usuário não é administrador.', 404)
-    # ninguém tira a própria permissão de gerenciar usuários (evita se trancar para fora)
-    if id == quem and 'gerenciar_usuarios' not in (
-            set(PERMISSOES_VALIDAS) if permissoes == 'admin'
-            else set(permissoes.split(',')) | set(PERMISSOES_DO_NIVEL[nivel])):
-        raise ErroRequisicao('Você não pode tirar de si mesmo a permissão de gerenciar usuários.')
-    executar('UPDATE admin SET nivel_acesso = %s, permissoes = %s WHERE id_admin = %s', (nivel, permissoes, id))
-    return ok('Nível de acesso atualizado!')
+@app.route('/usuarios/<int:id>/pedido-perfil', methods=['POST'])
+def decidir_pedido_perfil(id):
+    """Aprova ou recusa o pedido de administrador feito no cadastro. acao = aprovar | recusar."""
+    exigir_admin()
+    dados = corpo('acao')
+    exigir_em(dados['acao'], ('aprovar', 'recusar'), 'acao')
+    u = consultar('SELECT id_usuario, tipo_usuario, perfil_solicitado FROM usuario WHERE id_usuario = %s',
+                  (id,), um=True)
+    if not u:
+        raise ErroRequisicao('Usuário não encontrado', 404)
+    if not u['perfil_solicitado']:
+        raise ErroRequisicao('Esse usuário não tem pedido pendente.', 409)
+    if dados['acao'] == 'recusar':
+        executar('UPDATE usuario SET perfil_solicitado = NULL WHERE id_usuario = %s', (id,))
+        return ok('Pedido recusado. A conta continua como usuário comum.')
+    if u['tipo_usuario'] == 'admin':
+        raise ErroRequisicao('Esse usuário já é administrador.', 409)
+    chamar_procedure('sp_promover_admin', [id, 1, 'admin'], commit=True)
+    executar('UPDATE usuario SET perfil_solicitado = NULL WHERE id_usuario = %s', (id,))
+    return ok('Pedido aprovado! O usuário agora é administrador.')
 
 
 @app.route('/admin', methods=['GET'])
 def listar_admins():
-    exigir_admin('gerenciar_usuarios')
+    exigir_admin()
     return jsonify(consultar("""
         SELECT u.id_usuario, u.nome, u.email,
                a.nivel_acesso, a.permissoes,
@@ -994,7 +964,7 @@ def relatorio_chamados():
 
 @app.route('/relatorio/usuarios', methods=['GET'])
 def relatorio_usuarios():
-    exigir_admin('emitir_relatorios')          # lista todas as pessoas do sistema: só administrador
+    exigir_admin()          # lista todas as pessoas do sistema: só administrador
     return jsonify(chamar_procedure('sp_desempenho_usuarios', []))
 
 

@@ -40,6 +40,8 @@ BEGIN
         cpf             VARCHAR(14)   NOT NULL,
         ultimo_login    DATETIME,
         tipo_usuario    ENUM('usuario', 'admin') NOT NULL DEFAULT 'usuario',
+        -- pedido de administrador feito no cadastro; a conta nasce comum e um admin aprova ou recusa (NULL = sem pedido)
+        perfil_solicitado ENUM('administrador') NULL DEFAULT NULL,
 
         CONSTRAINT pk_usuario        PRIMARY KEY (id_usuario),
         CONSTRAINT uq_usuario_email  UNIQUE (email),

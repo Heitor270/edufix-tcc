@@ -182,10 +182,63 @@ function aplicarTema() {
     });
 }
 
+/**
+ * Troca claro/escuro com UMA transição só, em vez de cada elemento mudar de cor no seu tempo
+ * (era isso que fazia a tela "piscar" e as linhas das tabelas ficarem para trás).
+ *  - Chrome/Edge/Safari novos: o tema novo se espalha em círculo a partir do botão (View Transitions).
+ *  - Quem pediu "reduzir movimento": só um fade rápido, sem o círculo.
+ *  - Navegadores sem View Transitions: fade simples na página inteira.
+ * Durante a troca a classe "trocando-tema" congela as transições soltas do CSS (ver style.css).
+ */
 function alternarTema() {
+    const html = document.documentElement;
     const novo = (localStorage.getItem('tema') || 'light') === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('tema', novo);
-    aplicarTema();
+    const aplicar = () => {
+        localStorage.setItem('tema', novo);
+        aplicarTema();
+        const btn = document.querySelector('.theme-toggle, .theme-toggle-auth');
+        if (btn) {                                   // o ícone gira ao entrar
+            btn.classList.remove('tema-girar');
+            void btn.offsetWidth;
+            btn.classList.add('tema-girar');
+            setTimeout(() => btn.classList.remove('tema-girar'), 900);
+        }
+    };
+
+    // de onde o círculo nasce: o botão que foi clicado
+    const evento = window.event;
+    const origem = (evento && evento.currentTarget && evento.currentTarget.getBoundingClientRect)
+        ? evento.currentTarget : document.querySelector('.theme-toggle, .theme-toggle-auth');
+    const r = origem ? origem.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const raio = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    html.classList.add('trocando-tema');
+    html.dataset.temaEfeito = reduzir ? 'fade' : 'circulo';
+    const terminar = () => { html.classList.remove('trocando-tema'); delete html.dataset.temaEfeito; };
+
+    if (typeof document.startViewTransition !== 'function') {        // sem suporte: fade simples
+        aplicar();
+        if (document.body.animate) {
+            document.body.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 420, easing: 'cubic-bezier(0.36, 0.66, 0.04, 1)' });
+        }
+        setTimeout(terminar, 450);
+        return;
+    }
+
+    const transicao = document.startViewTransition(aplicar);
+    transicao.ready.then(() => {
+        if (reduzir) return;                                         // o fade padrão do navegador já basta
+        const dur = 700, curva = 'cubic-bezier(0.4, 0, 0.2, 1)';
+        html.animate(                                                // o tema novo se abre em círculo
+            { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${raio}px at ${x}px ${y}px)`] },
+            { duration: dur, easing: curva, pseudoElement: '::view-transition-new(root)', fill: 'both' });
+        html.animate(                                                // o tema antigo recua um pouco, dando profundidade
+            { transform: ['scale(1)', 'scale(0.965)'], filter: ['brightness(1)', 'brightness(0.82)'] },
+            { duration: dur, easing: curva, pseudoElement: '::view-transition-old(root)', fill: 'both' });
+    }).catch(() => {});
+    transicao.finished.then(terminar, terminar);
 }
 
 // ── TOAST NOTIFICATIONS ───────────────────────
@@ -589,7 +642,8 @@ async function cadastrar() {
         email:           document.getElementById('email').value.trim(),
         senha:           document.getElementById('senha').value,
         cpf:             document.getElementById('cpf').value.replace(/\D/g, ''),
-        telefone:        document.getElementById('telefone').value.trim()
+        telefone:        document.getElementById('telefone').value.trim(),
+        perfil:          document.getElementById('perfil')?.value || 'usuario'
     };
 
     let valido = true;
@@ -648,8 +702,10 @@ async function cadastrar() {
     try {
         const data = await api('/cadastrar', { corpo: campos });
         if (data.sucesso) {
-            mostrarToast('Cadastro realizado com sucesso!', 'sucesso');
-            setTimeout(() => window.location.href = 'index.html', 1200);
+            if (data.primeiro_admin) mostrarToast(data.mensagem, 'sucesso');
+            else mostrarToast(campos.perfil === 'usuario' ? 'Cadastro realizado com sucesso!'
+                : 'Cadastro realizado! Seu pedido de perfil aguarda aprovação de um administrador.', 'sucesso');
+            setTimeout(() => window.location.href = 'index.html', (campos.perfil === 'usuario' && !data.primeiro_admin) ? 1200 : 2600);
             return;
         }
         erro.textContent = data.mensagem || 'Não foi possível cadastrar.';
