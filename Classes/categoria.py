@@ -19,6 +19,16 @@ class Categoria:
         self.nome = nome
         self._equipamentos: List["Equipamento"] = []
 
+    def validarCategoria(self) -> bool:
+        """Confere se a categoria pode receber bens (usada no cadastro do equipamento,
+        como o diagrama de classes indica): id positivo e nome valido. Devolve True ou
+        levanta ValueError."""
+        if not isinstance(self.id_categoria, int) or self.id_categoria <= 0:
+            raise ValueError("Categoria invalida: id_categoria deve ser um inteiro positivo.")
+        if len(" ".join((self.nome or "").split())) < 2:
+            raise ValueError("Categoria invalida: nome deve ter pelo menos 2 caracteres.")
+        return True
+
     # chamados pelo Equipamento (mantem os dois lados da associacao coerentes)
     def _adicionar(self, equipamento: "Equipamento") -> None:
         if equipamento not in self._equipamentos:

@@ -1312,12 +1312,20 @@ CREATE PROCEDURE sp_relatorio_operacional(
     IN p_id_usuario INT
 )
 BEGIN
+    DECLARE v_manutencoes INT DEFAULT 0;
+    DECLARE v_custo       DECIMAL(12, 2) DEFAULT 0;
+
     IF fn_admin_tem_permissao(p_id_usuario, 'emitir_relatorios') = 0 THEN
         SIGNAL SQLSTATE '45403'
             SET MESSAGE_TEXT = 'Apenas administradores com permissão de relatórios emitem este relatório.';
     END IF;
 
+    -- O MySQL 8 não deixa a mesma tabela temporária aparecer duas vezes na mesma consulta
+    -- (erro 1137). Por isso os subtotais de manutenção são calculados antes em variáveis
+    -- e o resultado 7 (UNION) lê de cópias da tabela temporária.
     DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados;
+    DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados_b;
+    DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados_c;
     CREATE TEMPORARY TABLE tmp_rel_chamados AS
     SELECT c.id_chamado, c.status, c.prioridade, c.id_equipamento, c.data_abertura,
            c.descricao_problema,
@@ -1335,6 +1343,15 @@ BEGIN
     WHERE (p_inicio IS NULL OR DATE(c.data_abertura) >= p_inicio)
       AND (p_fim    IS NULL OR DATE(c.data_abertura) <= p_fim);
 
+    CREATE TEMPORARY TABLE tmp_rel_chamados_b AS SELECT * FROM tmp_rel_chamados;
+    CREATE TEMPORARY TABLE tmp_rel_chamados_c AS SELECT * FROM tmp_rel_chamados;
+
+    SELECT COUNT(*),
+           COALESCE(SUM(fn_custo_manutencao_total(m.id_manutencao, p_taxa_hora)), 0)
+      INTO v_manutencoes, v_custo
+      FROM manutencao m
+     WHERE m.id_chamado IN (SELECT id_chamado FROM tmp_rel_chamados_b);
+
     -- 1) indicadores gerais
     SELECT COUNT(*)                                                    AS total_chamados,
            COALESCE(SUM(status IN ('aberto', 'em_analise', 'em_execucao')), 0) AS em_andamento,
@@ -1346,11 +1363,8 @@ BEGIN
            COALESCE(SUM(sla_estourado), 0)                             AS sla_estourados,
            ROUND(100 * (1 - COALESCE(SUM(sla_estourado), 0) / NULLIF(COUNT(*), 0)), 1)
                                                                        AS sla_cumprido_pct,
-           (SELECT COUNT(*) FROM manutencao m
-             WHERE m.id_chamado IN (SELECT id_chamado FROM tmp_rel_chamados)) AS manutencoes,
-           (SELECT COALESCE(SUM(fn_custo_manutencao_total(m.id_manutencao, p_taxa_hora)), 0)
-              FROM manutencao m
-             WHERE m.id_chamado IN (SELECT id_chamado FROM tmp_rel_chamados)) AS custo_manutencao
+           v_manutencoes                                               AS manutencoes,
+           v_custo                                                     AS custo_manutencao
     FROM tmp_rel_chamados;
 
     -- 2) por status
@@ -1393,17 +1407,19 @@ BEGIN
     UNION ALL
     SELECT 'SLA',
            CONCAT('Chamado #', id_chamado, ' passou do prazo de ', fn_sla_horas(prioridade), 'h (', ROUND(horas), 'h em aberto)')
-    FROM tmp_rel_chamados
+    FROM tmp_rel_chamados_b
     WHERE sla_estourado = 1 AND status IN ('aberto', 'em_analise', 'em_execucao')
     UNION ALL
     SELECT 'REINCIDENCIA',
            CONCAT(equipamento, ' acumulou ', COUNT(*), ' chamados no período: avaliar substituição')
-    FROM tmp_rel_chamados
+    FROM tmp_rel_chamados_c
     WHERE equipamento IS NOT NULL
     GROUP BY id_equipamento, equipamento
     HAVING COUNT(*) >= 3;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados;
+    DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados_b;
+    DROP TEMPORARY TABLE IF EXISTS tmp_rel_chamados_c;
 END $$
 
 

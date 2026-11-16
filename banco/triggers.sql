@@ -491,9 +491,9 @@ AFTER INSERT ON equipamento
 FOR EACH ROW
 BEGIN
     INSERT INTO log_patrimonio
-        (id_equipamento, nome_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
+        (id_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
     VALUES
-        (NEW.id_equipamento, NEW.nome, 'CADASTRO', NULL, NEW.localizacao,
+        (NEW.id_equipamento, 'CADASTRO', NULL, NEW.localizacao,
          COALESCE(@edufix_usuario, CURRENT_USER()));
 END $$
 
@@ -509,25 +509,25 @@ FOR EACH ROW
 BEGIN
     IF NOT (OLD.localizacao <=> NEW.localizacao) THEN
         INSERT INTO log_patrimonio
-            (id_equipamento, nome_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
+            (id_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
         VALUES
-            (NEW.id_equipamento, NEW.nome, 'TRANSFERENCIA', OLD.localizacao, NEW.localizacao,
+            (NEW.id_equipamento, 'TRANSFERENCIA', OLD.localizacao, NEW.localizacao,
              COALESCE(@edufix_usuario, CURRENT_USER()));
     END IF;
 
     IF OLD.status <> NEW.status THEN
         INSERT INTO log_patrimonio
-            (id_equipamento, nome_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
+            (id_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
         VALUES
-            (NEW.id_equipamento, NEW.nome, 'MUDANCA_STATUS', OLD.status, NEW.status,
+            (NEW.id_equipamento, 'MUDANCA_STATUS', OLD.status, NEW.status,
              COALESCE(@edufix_usuario, CURRENT_USER()));
     END IF;
 
     IF OLD.estado_conservacao <> NEW.estado_conservacao THEN
         INSERT INTO log_patrimonio
-            (id_equipamento, nome_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
+            (id_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
         VALUES
-            (NEW.id_equipamento, NEW.nome, 'MUDANCA_CONSERVACAO',
+            (NEW.id_equipamento, 'MUDANCA_CONSERVACAO',
              OLD.estado_conservacao, NEW.estado_conservacao,
              COALESCE(@edufix_usuario, CURRENT_USER()));
     END IF;
@@ -565,9 +565,9 @@ AFTER DELETE ON equipamento
 FOR EACH ROW
 BEGIN
     INSERT INTO log_patrimonio
-        (id_equipamento, nome_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
+        (id_equipamento, acao, valor_anterior, valor_novo, usuario_banco)
     VALUES
-        (OLD.id_equipamento, OLD.nome, 'EXCLUSAO', OLD.status, NULL,
+        (OLD.id_equipamento, 'EXCLUSAO', OLD.status, NULL,
          COALESCE(@edufix_usuario, CURRENT_USER()));
 END $$
 

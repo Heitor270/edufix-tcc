@@ -3,28 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISEPAM — Login</title>
+    <title>EduFix — Login</title>
     <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="auth-body">
 
-<button class="theme-toggle-auth" onclick="alternarTema()">Modo Escuro</button>
+<button class="theme-toggle-auth" onclick="alternarTema()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Modo Escuro</span></button>
 
-<div class="auth-card">
-    <div class="auth-logo">
-        <h1>ISEPAM</h1>
-        <p>Acesse o sistema</p>
-    </div>
+<div class="auth-shell">
+    <section class="auth-hero">
+        <div class="marca"><span class="marca-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/><circle class="ponto" cx="18.5" cy="5" r="3"/></svg></span><div class="marca-nome">Edu<span>Fix</span></div></div>
+        <div class="hero-texto">
+            <h2>Cada bem escolar<br>no seu <em>lugar</em>.</h2>
+            <p>Controle o patrimônio, abra chamados e acompanhe as manutenções da escola em um só lugar.</p>
+            <ul class="hero-lista"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>Inventário completo de bens por setor</span></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M12 8v4M12 16h.01"/></svg><span>Chamados de manutenção com prazo (SLA)</span></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span>Alertas e relatórios em tempo real</span></li></ul>
+        </div>
+        <div class="hero-rodape">ISEPAM · FAETEC — Campos dos Goytacazes</div>
+    </section>
 
-    <input type="email" id="email" placeholder="Email" />
-    <input type="password" id="senha" placeholder="Senha" />
-    <button class="btn-primary" onclick="login()">Entrar</button>
-    <p class="erro" id="erro"></p>
+    <section class="auth-painel">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1>Bem-vindo de volta</h1>
+                <p>Entre com seu e-mail e senha para acessar o sistema.</p>
+            </div>
 
-    <div class="auth-link">
-        Não tem conta? <a onclick="window.location.href='cadastro.html'">Criar cadastro</a>
-    </div>
+            <input type="email" id="email" placeholder="Email" />
+            <input type="password" id="senha" placeholder="Senha" />
+            <button class="btn-primary" onclick="login()">Entrar</button>
+            <p class="erro" id="erro"></p>
+
+            <div class="auth-link">
+                Não tem conta? <a onclick="window.location.href='cadastro.html'">Criar cadastro</a>
+            </div>
+        </div>
+    </section>
 </div>
 
 <script src="script.js"></script>

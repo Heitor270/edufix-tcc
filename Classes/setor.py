@@ -19,6 +19,16 @@ class Setor:
         self.nome = nome
         self._equipamentos: List["Equipamento"] = []
 
+    def validarSetor(self) -> bool:
+        """Confere se o setor pode receber bens (usada no cadastro do equipamento, como
+        o diagrama de classes indica): id positivo e nome valido. Devolve True ou
+        levanta ValueError."""
+        if not isinstance(self.id_setor, int) or self.id_setor <= 0:
+            raise ValueError("Setor invalido: id_setor deve ser um inteiro positivo.")
+        if len(" ".join((self.nome or "").split())) < 2:
+            raise ValueError("Setor invalido: nome deve ter pelo menos 2 caracteres.")
+        return True
+
     def _adicionar(self, equipamento: "Equipamento") -> None:
         if equipamento not in self._equipamentos:
             self._equipamentos.append(equipamento)

@@ -112,10 +112,28 @@ class Chamado:
                 + f"[{quando:%d/%m/%Y %H:%M}] {texto}"
 
     # -------------------------------------------------------- metodos UML
-    def registrarAbertura(self, quando: Optional[datetime] = None) -> HistoricoStatusChamado:
-        """Efetiva o chamado: valida usuario ativo, equipamento aceito (nao inativo -
-        regra 45422), descricao e duplicidade; classifica a prioridade se ela nao foi
-        escolhida; vincula o chamado ao usuario e ao equipamento e grava o 1o historico."""
+    @classmethod
+    def criarChamado(
+        cls,
+        usuario: "Usuario",
+        equipamento: "Equipamento",
+        descricao_problema: str,
+        prioridade: Optional[str] = None,
+        observacoes: str = "",
+        quando: Optional[datetime] = None,
+    ) -> "Chamado":
+        """Cria E registra o chamado de uma vez (prioridade=None -> automatica). Devolve
+        o chamado ja aberto; se alguma regra falhar, nada fica vinculado ao usuario nem
+        ao equipamento. E o passo 'criarChamado()' do diagrama de sequencia."""
+        chamado = cls(None, usuario, equipamento, descricao_problema, prioridade,
+                      observacoes, quando)
+        chamado.registrarAbertura(quando)
+        return chamado
+
+    def validarAbertura(self) -> bool:
+        """Regras para ABRIR o chamado (nada e gravado): usuario ativo, equipamento aceito
+        (nao inativo - regra 45422), descricao com 10+ caracteres e sem chamado ativo
+        identico do mesmo usuario para o mesmo bem. Devolve True ou levanta o erro."""
         if self.registrado:
             raise RuntimeError("Chamado ja registrado.")
         if not self.usuario.ativo:
@@ -126,12 +144,18 @@ class Chamado:
             raise ValueError("Descreva o problema (minimo 10 caracteres).")
         if any(c.usuario is self.usuario and c.ativo for c in self.equipamento.chamados):
             raise ValueError("Voce ja tem um chamado em andamento para este equipamento.")
+        return True
+
+    def registrarAbertura(self, quando: Optional[datetime] = None) -> HistoricoStatusChamado:
+        """Efetiva o chamado: valida (validarAbertura); classifica a prioridade se ela nao
+        foi escolhida; vincula o chamado ao usuario e ao equipamento e grava o 1o
+        historico (status 'aberto')."""
+        self.validarAbertura()
         self.data_abertura = quando or self.data_abertura
         if not self._prioridade_definida:
             self.classificarPrioridade(_antes_do_registro=True)
-        hist = HistoricoStatusChamado(None, self, None, "aberto", self.usuario.id_usuario,
-                                      "Chamado aberto", self.data_abertura)
-        self._historico.append(hist)
+        hist = HistoricoStatusChamado.registrarHistorico(
+            self, "aberto", self.usuario.id_usuario, "Chamado aberto", self.data_abertura)
         self.usuario._registrar_chamado(self)
         self.equipamento._registrar_chamado(self)
         return hist
@@ -163,27 +187,57 @@ class Chamado:
         self._prioridade_definida = True
         return nova
 
-    def atualizarStatus(self, novo_status: str, usuario: "Usuario", observacao: str = "",
-                        quando: Optional[datetime] = None) -> HistoricoStatusChamado:
-        """Muda o status seguindo TRANSICOES_VALIDAS e grava o historico. Permissoes:
-        administrador com 'gerenciar_chamados' faz qualquer transicao; o autor do chamado
-        so pode CANCELAR enquanto ele estiver 'aberto'. Concluir exige que nao haja
-        manutencao em andamento (e observacao se nao houve manutencao). Preenche/limpa
-        data_fechamento como o trigger trg_chamado_data_fechamento."""
+    def validarTransicao(self, novo_status: str) -> bool:
+        """O status atual pode virar 'novo_status'? (regra unica em TRANSICOES_VALIDAS,
+        a mesma de fn_transicao_status_valida no banco). True ou ValueError."""
         if not self.registrado:
             raise RuntimeError("Registre a abertura do chamado primeiro.")
-        if not usuario.ativo:
-            raise PermissionError("Usuario inativo.")
         if novo_status not in TRANSICOES_VALIDAS:
             raise ValueError(f"Status invalido: {novo_status!r}.")
         if novo_status not in TRANSICOES_VALIDAS[self.status]:
             raise ValueError(f"Transicao invalida: {self.status} -> {novo_status}.")
-        eh_gestor = usuario.possui_permissao("gerenciar_chamados")
-        if not eh_gestor:
-            if not (usuario is self.usuario and novo_status == "cancelado"
-                    and self.status == "aberto"):
-                raise PermissionError("Voce so pode cancelar o seu proprio chamado enquanto "
-                                      "ele estiver aberto.")
+        return True
+
+    def validarPermissao(self, usuario: "Usuario", acao: str = "atualizar_status",
+                         novo_status: Optional[str] = None) -> bool:
+        """Quem pode fazer o que neste chamado (mesma regra da interface e do servidor):
+          * administrador com 'gerenciar_chamados': qualquer acao;
+          * autor do chamado: 'editar' o proprio chamado e CANCELAR (acao
+            'atualizar_status' com novo_status='cancelado') enquanto ele estiver 'aberto';
+          * qualquer usuario ativo: 'consultar'.
+        Devolve True ou levanta PermissionError."""
+        if usuario is None or not usuario.ativo:
+            raise PermissionError("Usuario inativo.")
+        if acao == "consultar" or usuario.possui_permissao("gerenciar_chamados"):
+            return True
+        autor = usuario is self.usuario
+        if acao == "editar" and autor:
+            return True
+        if acao == "atualizar_status" and autor and novo_status == "cancelado" \
+                and self.status == "aberto":
+            return True
+        if acao in ("atualizar_status", "encerrar"):
+            raise PermissionError("Voce so pode cancelar o seu proprio chamado enquanto "
+                                  "ele estiver aberto.")
+        raise PermissionError("Sem permissao para esta acao no chamado.")
+
+    def atualizarStatus(self, novo_status: str, usuario: "Usuario", observacao: str = "",
+                        quando: Optional[datetime] = None,
+                        _automatico: bool = False) -> HistoricoStatusChamado:
+        """Muda o status seguindo TRANSICOES_VALIDAS (validarTransicao) e grava o
+        historico (registrarHistorico). Permissoes (validarPermissao): administrador com
+        'gerenciar_chamados' faz qualquer transicao; o autor do chamado so pode CANCELAR
+        enquanto ele estiver 'aberto'. Concluir exige que nao haja manutencao em
+        andamento (e observacao se nao houve manutencao). Preenche/limpa data_fechamento
+        como o trigger trg_chamado_data_fechamento. _automatico=True e de uso interno:
+        avancos causados pela manutencao nao dependem do perfil de quem a registrou."""
+        if not self.registrado:
+            raise RuntimeError("Registre a abertura do chamado primeiro.")
+        if not usuario.ativo:
+            raise PermissionError("Usuario inativo.")
+        self.validarTransicao(novo_status)
+        if not _automatico:
+            self.validarPermissao(usuario, "atualizar_status", novo_status)
         quando = quando or datetime.now()
         if quando < self._historico[-1].data_alteracao:
             raise ValueError("Data anterior a ultima alteracao do historico.")
@@ -197,9 +251,8 @@ class Chamado:
                 raise ValueError("Concluir sem manutencao exige observacao explicando a solucao.")
         if novo_status == "cancelado" and any(m.em_andamento for m in self._manutencoes):
             raise RuntimeError("Ha manutencao em andamento: conclua-a antes de cancelar.")
-        hist = HistoricoStatusChamado(None, self, self.status, novo_status,
-                                      usuario.id_usuario, observacao, quando)
-        self._historico.append(hist)
+        hist = HistoricoStatusChamado.registrarHistorico(
+            self, novo_status, usuario.id_usuario, observacao, quando)
         self.status = novo_status
         self.data_fechamento = quando if novo_status in STATUS_FINAIS else None
         self._anotar(observacao, quando)
@@ -219,6 +272,9 @@ class Chamado:
             raise RuntimeError("Chamado ja encerrado ou nao registrado.")
         if not usuario.possui_permissao("gerenciar_chamados") and usuario is not self.usuario:
             raise PermissionError("Sem permissao para encerrar este chamado.")
+        if not usuario.possui_permissao("gerenciar_chamados") and resolvido:
+            raise PermissionError("So o administrador conclui o chamado "
+                                  "(o autor pode cancelar enquanto ele estiver aberto).")
         quando = quando or datetime.now()
         if not resolvido:
             return self.atualizarStatus("cancelado", usuario, observacao, quando)
@@ -229,6 +285,29 @@ class Chamado:
         if self.status == "em_analise":
             self.atualizarStatus("em_execucao", usuario, "Avanco automatico ao encerrar", quando)
         return self.atualizarStatus("concluido", usuario, observacao, quando)
+
+    def consultarSituacao(self, agora: Optional[datetime] = None) -> dict:
+        """Situacao completa do chamado para a tela de acompanhamento: status e prioridade
+        atuais, proximos status permitidos, prazo/SLA, tempo de atendimento, ultima
+        alteracao do historico, manutencoes (total e em andamento) e custo."""
+        if not self.registrado:
+            raise RuntimeError("Chamado ainda nao registrado.")
+        ultima = self._historico[-1]
+        return {
+            "id": self.id_chamado, "status": self.status, "prioridade": self.prioridade,
+            "ativo": self.ativo,
+            "proximos_status": TRANSICOES_VALIDAS[self.status],
+            "prazo_sla_horas": self.prazo_sla_horas,
+            "sla_estourado": self.sla_estourado(agora),
+            "tempo_atendimento_h": round(self.tempo_atendimento(agora).total_seconds() / 3600, 2),
+            "aberto_em": self.data_abertura, "fechado_em": self.data_fechamento,
+            "ultima_alteracao": {"de": ultima.status_anterior, "para": ultima.status_novo,
+                                 "em": ultima.data_alteracao, "por": ultima.alterado_por},
+            "mudancas_de_status": len(self._historico),
+            "manutencoes": len(self._manutencoes),
+            "manutencoes_em_andamento": sum(1 for m in self._manutencoes if m.em_andamento),
+            "custo_total": self.custo_total,
+        }
 
     def resumo(self) -> dict:
         return {"id": self.id_chamado, "usuario": self.usuario.nome,

@@ -3,33 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISEPAM — Inventário</title>
-    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
+    <title>EduFix — Inventário</title>
+    <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);try{const u=JSON.parse(localStorage.getItem('usuario')||'null');if(u&&u.tipo_usuario==='admin')document.documentElement.classList.add('is-admin');}catch(e){}</script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
+        <div class="marca">
+            <span class="marca-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/><circle class="ponto" cx="18.5" cy="5" r="3"/></svg></span>
+            <div><div class="marca-nome">Edu<span>Fix</span></div><small>Gestão patrimonial</small></div>
+        </div>
         <div class="sidebar-brand">
-            <h2>Patrimônio</h2>
-            <p id="usuario-nome">Carregando...</p>
+            <div class="usuario-card">
+                <div class="usuario-avatar" id="usuario-avatar">?</div>
+                <div class="usuario-dados">
+                    <div id="usuario-nome">Carregando...</div>
+                    <div class="usuario-papel" id="usuario-papel">&nbsp;</div>
+                </div>
+            </div>
         </div>
         <nav class="sidebar-nav">
-            <a class="nav-item" href="dashboard.html">Dashboard</a>
-            <a class="nav-item active" href="inventario.html">Inventário</a>
-            <a class="nav-item" href="cadastrar-bem.html">Cadastrar</a>
-            <a class="nav-item" href="chamados.html">Chamados</a>
-            <a class="nav-item" href="manutencoes.html">Manutenções</a>
-            <a class="nav-item" href="consultas.html">Consultas</a>
-            <a class="nav-item" href="relatorios.html">Relatórios</a>
-            <a class="nav-item" href="usuarios.html">Usuários</a>
+            <div class="nav-titulo">Menu</div>
+            <a class="nav-item" href="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a>
+            <a class="nav-item active" href="inventario.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>Inventário</span></a>
+            <a class="nav-item" href="cadastrar-bem.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>Cadastrar</span></a>
+            <a class="nav-item" href="chamados.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M12 8v4M12 16h.01"/></svg><span>Chamados</span></a>
+            <a class="nav-item" href="manutencoes.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span>Manutenções</span></a>
+            <a class="nav-item" href="consultas.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>Consultas</span></a>
+            <a class="nav-item" href="relatorios.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg><span>Relatórios</span></a>
+            <a class="nav-item" data-so-admin href="usuarios.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg><span>Usuários</span></a>
         </nav>
         <div class="sidebar-footer">
-            <button class="theme-toggle" onclick="alternarTema()">Modo Escuro</button>
-            <a class="nav-item sair" onclick="sair()">Sair</a>
+            <button class="theme-toggle" onclick="alternarTema()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Modo Escuro</span></button>
+            <a class="nav-item sair" onclick="sair()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg><span>Sair</span></a>
         </div>
     </aside>
+    <script>
+    /* preenche nome/perfil do usuário já na montagem da página (evita o "Carregando..." e itens piscando) */
+    try {
+        const u = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (u) {
+            document.getElementById('usuario-nome').textContent = u.nome;
+            document.getElementById('usuario-avatar').textContent = (u.nome || '?').trim().charAt(0).toUpperCase();
+            document.getElementById('usuario-papel').textContent = u.tipo_usuario === 'admin' ? 'Administrador' : 'Usuário';
+        }
+    } catch (e) { /* sem localStorage */ }
+    </script>
+    <div class="sidebar-overlay" onclick="alternarMenu()"></div>
+    <header class="topbar">
+        <div class="marca"><span class="marca-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/><circle class="ponto" cx="18.5" cy="5" r="3"/></svg></span><div class="marca-nome">Edu<span>Fix</span></div></div>
+        <button class="btn-menu" onclick="alternarMenu()" aria-label="Abrir menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </header>
 
     <main class="main">
       <div class="content-wrap">

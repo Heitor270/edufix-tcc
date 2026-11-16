@@ -3,36 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISEPAM — Cadastro</title>
+    <title>EduFix — Cadastro</title>
     <script>const t=localStorage.getItem('tema')||'light';document.documentElement.setAttribute('data-theme',t);</script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="auth-body">
 
-<button class="theme-toggle-auth" onclick="alternarTema()">Modo Escuro</button>
+<button class="theme-toggle-auth" onclick="alternarTema()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Modo Escuro</span></button>
 
-<div class="auth-card">
-    <div class="auth-logo">
-        <h1>ISEPAM</h1>
-        <p>Crie sua conta</p>
-    </div>
+<div class="auth-shell">
+    <section class="auth-hero">
+        <div class="marca"><span class="marca-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/><circle class="ponto" cx="18.5" cy="5" r="3"/></svg></span><div class="marca-nome">Edu<span>Fix</span></div></div>
+        <div class="hero-texto">
+            <h2>Comece a cuidar<br>do <em>patrimônio</em>.</h2>
+            <p>Crie sua conta para registrar chamados de manutenção e acompanhar tudo o que acontece com os bens da escola.</p>
+            <ul class="hero-lista"><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>Inventário completo de bens por setor</span></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M12 8v4M12 16h.01"/></svg><span>Chamados de manutenção com prazo (SLA)</span></li><li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span>Alertas e relatórios em tempo real</span></li></ul>
+        </div>
+        <div class="hero-rodape">ISEPAM · FAETEC — Campos dos Goytacazes</div>
+    </section>
 
-    <input type="text" id="nome" placeholder="Nome completo" />
-    <input type="email" id="email" placeholder="Email" />
-    <input type="password" id="senha" placeholder="Senha" autocomplete="new-password" />
-    <input type="password" id="confirmar_senha" placeholder="Confirmar senha" autocomplete="new-password" />
-    <input type="text" id="cpf" placeholder="CPF" />
-    <input type="text" id="telefone" placeholder="Telefone" />
-    <div class="campo-data">
-        <input type="date" id="data_nascimento" />
-        <span class="campo-data-label">Data de nascimento</span>
-    </div>
-    <button class="btn-primary" onclick="cadastrar()">Cadastrar</button>
-    <p class="erro" id="erro"></p>
+    <section class="auth-painel">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1>Crie sua conta</h1>
+                <p>Preencha seus dados para começar a usar o sistema.</p>
+            </div>
 
-    <div class="auth-link">
-        Já tem conta? <a onclick="window.location.href='index.html'">Faça login</a>
-    </div>
+            <input type="text" id="nome" placeholder="Nome completo" />
+            <input type="email" id="email" placeholder="Email" />
+            <input type="password" id="senha" placeholder="Senha" autocomplete="new-password" />
+            <input type="password" id="confirmar_senha" placeholder="Confirmar senha" autocomplete="new-password" />
+            <input type="text" id="cpf" placeholder="CPF" />
+            <input type="text" id="telefone" placeholder="Telefone" />
+            <button class="btn-primary" onclick="cadastrar()">Cadastrar</button>
+            <p class="erro" id="erro"></p>
+
+            <div class="auth-link">
+                Já tem conta? <a onclick="window.location.href='index.html'">Faça login</a>
+            </div>
+        </div>
+    </section>
 </div>
 
 <script src="script.js"></script>

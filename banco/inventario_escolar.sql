@@ -224,11 +224,11 @@ BEGIN
     );
 
     -- Auditoria do patrimônio (classe LogPatrimonio). Sem chave estrangeira de
-    -- propósito: o registro precisa sobreviver à exclusão do equipamento.
+    -- propósito: o registro precisa sobreviver à exclusão do equipamento. Guarda só o
+    -- id_equipamento (sem o nome), para o nome não ficar repetido em duas tabelas.
     CREATE TABLE log_patrimonio (
         id_log           INT           NOT NULL AUTO_INCREMENT,
         id_equipamento   INT           NOT NULL,
-        nome_equipamento VARCHAR(100)  NOT NULL,
         acao             ENUM('CADASTRO', 'TRANSFERENCIA', 'MUDANCA_STATUS',
                               'MUDANCA_CONSERVACAO', 'EXCLUSAO') NOT NULL,
         valor_anterior   VARCHAR(100),

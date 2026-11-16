@@ -141,8 +141,8 @@ function iniciarSplash() {
     splash.id = 'splash';
     splash.innerHTML = `
         <div class="splash-conteudo">
-            <div class="splash-logo">ISEPAM</div>
-            <p class="splash-sub">Sistema de Gestão Patrimonial</p>
+            <div class="splash-logo">Edu<span style="color:#fbbf24">Fix</span></div>
+            <p class="splash-sub">ISEPAM · Gestão Patrimonial</p>
             <div class="splash-barra"><div class="splash-progresso"></div></div>
         </div>
     `;
@@ -175,8 +175,10 @@ function setupTransicoes() {
 function aplicarTema() {
     const tema = localStorage.getItem('tema') || 'light';
     document.documentElement.setAttribute('data-theme', tema);
+    const ICONE_LUA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+    const ICONE_SOL = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
     document.querySelectorAll('.theme-toggle, .theme-toggle-auth').forEach(btn => {
-        btn.textContent = tema === 'dark' ? 'Modo Claro' : 'Modo Escuro';
+        btn.innerHTML = (tema === 'dark' ? ICONE_SOL : ICONE_LUA) + '<span>' + (tema === 'dark' ? 'Modo Claro' : 'Modo Escuro') + '</span>';
     });
 }
 
@@ -587,8 +589,7 @@ async function cadastrar() {
         email:           document.getElementById('email').value.trim(),
         senha:           document.getElementById('senha').value,
         cpf:             document.getElementById('cpf').value.replace(/\D/g, ''),
-        telefone:        document.getElementById('telefone').value.trim(),
-        data_nascimento: document.getElementById('data_nascimento').value || null
+        telefone:        document.getElementById('telefone').value.trim()
     };
 
     let valido = true;
@@ -640,11 +641,6 @@ async function cadastrar() {
         valido = false;
     }
 
-    if (!campos.data_nascimento) {
-        mostrarErroCampo('data_nascimento', 'A data de nascimento é obrigatória.');
-        valido = false;
-    }
-
     if (!valido) return;
 
     const btn = document.querySelector('.btn-primary');
@@ -677,7 +673,17 @@ function carregarUsuario() {
     const el = document.getElementById('usuario-nome');
     if (!el) return;
     const usuario = obterUsuario();
-    if (usuario) el.textContent = 'Olá, ' + usuario.nome;
+    if (!usuario) return;
+    el.textContent = usuario.nome;
+    const avatar = document.getElementById('usuario-avatar');
+    if (avatar) avatar.textContent = (usuario.nome || '?').trim().charAt(0).toUpperCase();
+    const papel = document.getElementById('usuario-papel');
+    if (papel) papel.textContent = usuario.tipo_usuario === 'admin' ? 'Administrador' : 'Usuário';
+}
+
+// Menu lateral no celular (botão da barra superior)
+function alternarMenu() {
+    document.body.classList.toggle('menu-aberto');
 }
 
 // ── HELPERS ──────────────────────────────────
@@ -771,14 +777,14 @@ async function carregarAlertas() {
 // ── GRÁFICOS (Chart.js) ───────────────────────
 // Mesma paleta usada nos badges de status, pra não ter cor nova sem motivo.
 const CORES_STATUS_CHAMADO = {
-    aberto: '#3b82f6', em_analise: '#eab308', em_execucao: '#f97316',
-    concluido: '#22c55e', cancelado: '#94a3b8'
+    aberto: '#0ea5e9', em_analise: '#f59e0b', em_execucao: '#f97316',
+    concluido: '#10b981', cancelado: '#94a3b8'
 };
 const CORES_STATUS_EQUIPAMENTO = {
-    disponivel: '#22c55e', em_uso: '#3b82f6', em_manutencao: '#f97316', inativo: '#94a3b8'
+    disponivel: '#10b981', em_uso: '#0ea5e9', em_manutencao: '#f59e0b', inativo: '#94a3b8'
 };
 const CORES_CATEGORIA = {
-    Informatica: '#3b82f6', Mobiliario: '#8b5cf6', Climatizacao: '#14b8a6',
+    Informatica: '#0d9488', Mobiliario: '#6366f1', Climatizacao: '#0ea5e9',
     Eletrodomestico: '#f97316', Outro: '#94a3b8'
 };
 const COR_EIXO_GRAFICO = '#94a3b8';
@@ -948,7 +954,7 @@ function renderGraficoAtividadeUsuarios(usuarios, canvasId) {
             labels: top.map(u => u.nome_usuario),
             datasets: [
                 { label: 'Chamados criados', data: top.map(u => Number(u.total_chamados_criados ?? 0)),
-                  backgroundColor: '#3b82f6', borderRadius: 6, maxBarThickness: 36 },
+                  backgroundColor: '#0d9488', borderRadius: 6, maxBarThickness: 36 },
                 { label: 'Ainda em aberto', data: top.map(u => Number(u.chamados_ainda_abertos ?? 0)),
                   backgroundColor: '#f59e0b', borderRadius: 6, maxBarThickness: 36 }
             ]
@@ -988,7 +994,7 @@ function renderGraficoCustoEquipamentos(equipamentosResumo, canvasId) {
             labels: top.map(e => e.nome),
             datasets: [{
                 data: top.map(e => Number(e.custo_manutencao ?? e.custo_total_manutencao ?? 0)),
-                backgroundColor: '#8b5cf6',
+                backgroundColor: '#14b8a6',
                 borderRadius: 6,
                 maxBarThickness: 28
             }]
@@ -1111,7 +1117,7 @@ function renderizarChamados(lista) {
     el.innerHTML = lista.map(c => `
         <div class="chamado-item">
             <div class="chamado-header">
-                <span class="chamado-id">#${Number(c.id_chamado)}</span>
+                <span class="chamado-id">${Number(c.id_chamado)}</span>
                 <span class="badge status-${esc(c.status)}">${esc(formatarStatus(c.status))}</span>
                 <span class="badge prioridade-${esc(c.prioridade)}">${esc(formatarPrioridade(c.prioridade))}</span>
                 <span class="recent-data">${formatarData(c.data_abertura)}</span>
@@ -1432,7 +1438,7 @@ async function visualizarRelatorio() {
         resultado.innerHTML = `<table>
             <thead><tr><th>ID</th><th>Status</th><th>Prioridade</th><th>Usuário</th><th>Equipamento</th><th>Dias</th><th>Manutenções</th></tr></thead>
             <tbody>${data.map(c => `<tr>
-                <td>#${esc(c.id_chamado)}</td>
+                <td>${esc(c.id_chamado)}</td>
                 <td><span class="badge status-${esc(c.status)}">${esc(formatarStatus(c.status))}</span></td>
                 <td>${esc(formatarPrioridade(c.prioridade))}</td><td>${esc(c.nome_usuario)}</td>
                 <td>${esc(c.nome_equipamento) || '—'}</td><td>${esc(c.dias_resolucao ?? '—')}</td><td>${esc(c.total_manutencoes ?? 0)}</td>

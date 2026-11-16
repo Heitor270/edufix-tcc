@@ -755,7 +755,7 @@ let catalogoConsultas = null;
 let consultaAtual = null;      // objeto do catálogo
 let resultadoAtual = null;     // { colunas, linhas }
 
-const PALETA_GRAFICO = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
+const PALETA_GRAFICO = ['#0d9488', '#f59e0b', '#0ea5e9', '#ef4444', '#6366f1', '#10b981'];
 
 function rotuloOpcaoParametro(p, v) {
     if (v === '') return p.nome === 'status' ? 'Todos os status' : 'Todas as categorias';

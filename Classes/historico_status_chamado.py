@@ -84,6 +84,26 @@ class HistoricoStatusChamado:
     def __delattr__(self, nome):
         raise AttributeError("HistoricoStatusChamado e imutavel (registro de auditoria).")
 
+    # -------------------------------------------------------- metodo UML
+    @classmethod
+    def registrarHistorico(
+        cls,
+        chamado: "Chamado",
+        status_novo: str,
+        alterado_por: int,
+        observacao: str = "",
+        data_alteracao: Optional[datetime] = None,
+    ) -> "HistoricoStatusChamado":
+        """Grava uma mudanca de status no historico do chamado. O status anterior e
+        descoberto sozinho (None na abertura). Valida a transicao, exige motivo no
+        cancelamento/reabertura, anexa o registro ao chamado e o devolve. E o que a
+        procedure sp_alterar_status_chamado faz no banco."""
+        anterior = chamado.status if chamado.registrado else None
+        hist = cls(None, chamado, anterior, status_novo, alterado_por, observacao,
+                   data_alteracao)
+        chamado._historico.append(hist)
+        return hist
+
     # ---------------------------------------------------------- consultas
     @property
     def eh_abertura(self) -> bool:

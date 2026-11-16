@@ -253,6 +253,19 @@ def exigir_admin():
         raise ErroRequisicao('Acesso restrito a administradores.', 403)
 
 
+def usuario_logado():
+    """Quem fez a requisição: {'id_usuario', 'eh_admin'}. O perfil vem do banco, nunca do navegador.
+    Sem cabeçalho válido, usuário inexistente ou inativo -> 401."""
+    bruto = request.headers.get('X-Usuario-Id', '').strip()
+    if not bruto.isdigit():
+        raise ErroRequisicao('Faça login para continuar.', 401)
+    quem = consultar('SELECT id_usuario, ativo, fn_usuario_eh_admin(id_usuario) AS eh_admin '
+                     'FROM usuario WHERE id_usuario = %s', (int(bruto),), um=True)
+    if not quem or not quem['ativo']:
+        raise ErroRequisicao('Faça login para continuar.', 401)
+    return {'id_usuario': quem['id_usuario'], 'eh_admin': bool(quem['eh_admin'])}
+
+
 def exigir_em(valor, permitidos, campo):
     if valor not in permitidos:
         raise ErroRequisicao(f"Valor inválido para '{campo}': {valor}")
@@ -412,7 +425,7 @@ def login():
 
 @app.route('/cadastrar', methods=['POST'])
 def cadastrar():
-    dados = corpo('nome', 'email', 'senha', 'cpf', 'data_nascimento')
+    dados = corpo('nome', 'email', 'senha', 'cpf')
     dados['email'] = validar_email(dados['email'])
     garantir_banco()
     try:
@@ -420,7 +433,7 @@ def cadastrar():
             INSERT INTO usuario (nome, email, senha, cpf, telefone, data_nascimento)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (dados['nome'], dados['email'], gerar_hash(dados['senha']),
-              dados['cpf'], dados.get('telefone', ''), dados['data_nascimento']))
+              dados['cpf'], dados.get('telefone', ''), dados.get('data_nascimento') or None))
     except mysql.connector.IntegrityError as e:
         if e.errno == 1062:
             return jsonify({'sucesso': False, 'mensagem': 'Email ou CPF já cadastrado!'}), 409
@@ -611,8 +624,15 @@ def abrir_chamado():
 @app.route('/chamados/<int:id>', methods=['PUT'])
 def editar_chamado(id):
     """Edita os dados do chamado (o status continua sendo trocado em /status, com histórico)."""
+    quem = usuario_logado()
     dados = corpo('prioridade', 'descricao_problema')
     exigir_em(dados['prioridade'], PRIORIDADES, 'prioridade')
+    if not quem['eh_admin']:
+        dono = consultar('SELECT id_usuario FROM chamado WHERE id_chamado = %s', (id,), um=True)
+        if not dono:
+            raise ErroRequisicao('Chamado não encontrado', 404)
+        if dono['id_usuario'] != quem['id_usuario']:
+            raise ErroRequisicao('Você só pode editar os seus próprios chamados.', 403)
     apagadas, _ = executar("""
         UPDATE chamado SET prioridade=%s, descricao_problema=%s, observacoes=%s, id_equipamento=%s
         WHERE id_chamado=%s
@@ -625,8 +645,22 @@ def editar_chamado(id):
 
 @app.route('/chamados/<int:id>/status', methods=['PUT'])
 def atualizar_status_chamado(id):
-    dados = corpo('status', 'id_usuario')
+    quem = usuario_logado()
+    dados = corpo('status')
     exigir_em(dados['status'], STATUS_CHAMADO, 'status')
+
+    # Regra de perfil (conferida aqui, no servidor, e não só na interface):
+    #  - administrador: qualquer transição válida;
+    #  - usuário comum: apenas CANCELAR um chamado SEU que ainda esteja "aberto".
+    if not quem['eh_admin']:
+        chamado = consultar('SELECT id_usuario, status FROM chamado WHERE id_chamado = %s', (id,), um=True)
+        if not chamado:
+            raise ErroRequisicao('Chamado não encontrado', 404)
+        if (dados['status'] != 'cancelado' or chamado['id_usuario'] != quem['id_usuario']
+                or chamado['status'] != 'aberto'):
+            raise ErroRequisicao('Só o administrador pode alterar o status do chamado '
+                                 '(você pode cancelar um chamado seu que ainda esteja aberto).', 403)
+    dados['id_usuario'] = quem['id_usuario']   # o histórico registra quem realmente fez a alteração
 
     # a procedure faz tudo numa transação: troca o status, grava o histórico e
     # (pela trigger) preenche/limpa data_fechamento. Chamado inexistente -> 404.

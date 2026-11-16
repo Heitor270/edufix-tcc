@@ -2,7 +2,8 @@
 
 Linha de auditoria do patrimonio. Espelha a tabela log_patrimonio, alimentada no
 banco pelos triggers trg_equipamento_auditoria_*. E imutavel e NAO depende do
-equipamento continuar existindo (por isso guarda id e nome, sem chave estrangeira).
+equipamento continuar existindo: guarda so o id_equipamento (sem o nome e sem
+chave estrangeira), para o nome nao ficar repetido em duas tabelas.
 """
 from __future__ import annotations
 
@@ -20,7 +21,6 @@ class LogPatrimonio:
     # no __init__ com object.__setattr__ porque o registro e imutavel).
     id_log: int
     id_equipamento: int
-    nome_equipamento: str
     acao: str
     valor_anterior: Optional[str]
     valor_novo: Optional[str]
@@ -31,7 +31,6 @@ class LogPatrimonio:
         self,
         id_log: Optional[int],
         id_equipamento: int,
-        nome_equipamento: str,
         acao: str,
         valor_anterior: Optional[str],
         valor_novo: Optional[str],
@@ -40,6 +39,8 @@ class LogPatrimonio:
     ):
         if acao not in ACOES:
             raise ValueError(f"Acao invalida: {acao!r}. Use uma de {ACOES}.")
+        if not isinstance(id_equipamento, int):
+            raise TypeError("id_equipamento deve ser int.")
         if acao == "CADASTRO" and valor_anterior is not None:
             raise ValueError("CADASTRO nao tem valor anterior.")
         if acao == "EXCLUSAO" and valor_novo is not None:
@@ -51,7 +52,6 @@ class LogPatrimonio:
             raise ValueError("usuario_banco e obrigatorio.")
         for k, v in (("id_log", id_log if id_log is not None else next(self._sequencia)),
                      ("id_equipamento", id_equipamento),
-                     ("nome_equipamento", nome_equipamento),
                      ("acao", acao),
                      ("valor_anterior", valor_anterior),
                      ("valor_novo", valor_novo),
@@ -65,6 +65,23 @@ class LogPatrimonio:
     def __delattr__(self, nome):
         raise AttributeError("LogPatrimonio e imutavel (registro de auditoria).")
 
+    # -------------------------------------------------------- metodo UML
+    @classmethod
+    def registrarLog(
+        cls,
+        id_equipamento: int,
+        acao: str,
+        valor_anterior: Optional[str],
+        valor_novo: Optional[str],
+        usuario_banco: str,
+        data_hora: Optional[datetime] = None,
+    ) -> "LogPatrimonio":
+        """Cria (e valida) uma linha de auditoria. E o que os triggers
+        trg_equipamento_auditoria_insert/update/delete fazem no banco a cada
+        cadastro, transferencia, mudanca de status/conservacao e exclusao."""
+        return cls(None, id_equipamento, acao, valor_anterior, valor_novo,
+                   usuario_banco, data_hora)
+
     @property
     def descricao(self) -> str:
         a, n = self.valor_anterior, self.valor_novo
@@ -77,8 +94,8 @@ class LogPatrimonio:
         }[self.acao]
 
     def __str__(self) -> str:
-        return (f"[{self.data_hora:%d/%m/%Y %H:%M:%S}] #{self.id_equipamento} "
-                f"{self.nome_equipamento}: {self.descricao} (por {self.usuario_banco})")
+        return (f"[{self.data_hora:%d/%m/%Y %H:%M:%S}] bem #{self.id_equipamento}: "
+                f"{self.descricao} (por {self.usuario_banco})")
 
     def __repr__(self) -> str:
         return f"<LogPatrimonio #{self.id_log} {self.acao} equip={self.id_equipamento}>"

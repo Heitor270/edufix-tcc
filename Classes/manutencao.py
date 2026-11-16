@@ -34,18 +34,8 @@ class Manutencao:
             raise RuntimeError("Registre a abertura do chamado antes de criar manutencao.")
         if not chamado.ativo:
             raise RuntimeError("Chamado encerrado nao recebe nova manutencao (reabra-o).")
-        descricao_servico = (descricao_servico or "").strip()
-        if len(descricao_servico) < 5:
-            raise ValueError("Descreva o servico (minimo 5 caracteres).")
-        tecnico_responsavel = " ".join((tecnico_responsavel or "").split())
-        if len(tecnico_responsavel) < 3:
-            raise ValueError("Informe o tecnico responsavel.")
-        if custo < 0:
-            raise ValueError("Custo nao pode ser negativo.")
-        if data_fim is not None and data_inicio is None:
-            raise ValueError("Manutencao com data_fim precisa de data_inicio.")
-        if data_inicio and data_fim and data_fim < data_inicio:
-            raise ValueError("data_fim anterior a data_inicio.")
+        descricao_servico, tecnico_responsavel, custo = self._checar_dados(
+            descricao_servico, tecnico_responsavel, custo, data_inicio, data_fim)
         self.id_manutencao = id_manutencao if id_manutencao is not None else next(self._sequencia)
         self.chamado = chamado
         self.descricao_servico = descricao_servico
@@ -56,10 +46,41 @@ class Manutencao:
         self._procedimentos = 0
         chamado._registrar_manutencao(self)
 
+    # ------------------------------------------------------------ validacao
+    @staticmethod
+    def _checar_dados(descricao_servico, tecnico_responsavel, custo, data_inicio, data_fim):
+        descricao_servico = (descricao_servico or "").strip()
+        if len(descricao_servico) < 5:
+            raise ValueError("Descreva o servico (minimo 5 caracteres).")
+        tecnico_responsavel = " ".join((tecnico_responsavel or "").split())
+        if len(tecnico_responsavel) < 3:
+            raise ValueError("Informe o tecnico responsavel.")
+        if custo < 0:
+            raise ValueError("Custo nao pode ser negativo.")          # chk_manutencao_custo
+        if data_fim is not None and data_inicio is None:
+            raise ValueError("Manutencao com data_fim precisa de data_inicio.")
+        if data_inicio and data_fim and data_fim < data_inicio:
+            raise ValueError("data_fim anterior a data_inicio.")      # chk_manutencao_datas
+        return descricao_servico, tecnico_responsavel, custo
+
+    def validarDados(self) -> bool:
+        """Confere os dados atuais da manutencao (descricao, tecnico, custo e datas),
+        com as mesmas regras do cadastro e dos CHECKs da tabela. True ou ValueError."""
+        self._checar_dados(self.descricao_servico, self.tecnico_responsavel, self.custo,
+                           self.data_inicio, self.data_fim)
+        return True
+
     # ------------------------------------------------------------ leitura
     @property
     def equipamento(self) -> "Equipamento":
         return self.chamado.equipamento
+
+    @property
+    def id_equipamento(self) -> int:
+        """A tabela manutencao guarda tambem o equipamento (ligacao direta da Figura 3),
+        embora ele possa ser obtido pelo chamado - deixa as consultas de custo por bem
+        mais rapidas."""
+        return self.chamado.equipamento.id_equipamento
 
     @property
     def em_andamento(self) -> bool:
@@ -79,9 +100,10 @@ class Manutencao:
 
     @staticmethod
     def _exigir_permissao(executor: "Usuario") -> None:
-        if executor is None or not executor.ativo or not executor.possui_permissao("gerenciar_chamados"):
-            raise PermissionError("Apenas administradores ativos com permissao de chamados "
-                                  "executam manutencoes.")
+        """Registrar manutencao e funcao de QUALQUER usuario ativo (caso de uso do ator
+        Usuario). So concluir/alterar o STATUS do chamado fica com o administrador."""
+        if executor is None or not executor.ativo:
+            raise PermissionError("Apenas usuarios ativos registram manutencoes.")
 
     # -------------------------------------------------------- metodos UML
     def iniciarAtendimento(self, executor: "Usuario", quando: Optional[datetime] = None):
@@ -108,10 +130,12 @@ class Manutencao:
         self.data_inicio = quando
         ultimo = None
         if ch.status == "aberto":
-            ultimo = ch.atualizarStatus("em_analise", executor, "Atendimento iniciado", quando)
+            ultimo = ch.atualizarStatus("em_analise", executor, "Atendimento iniciado", quando,
+                                        _automatico=True)
         if ch.status == "em_analise":
             ultimo = ch.atualizarStatus("em_execucao", executor,
-                                        f"Manutencao #{self.id_manutencao} iniciada", quando)
+                                        f"Manutencao #{self.id_manutencao} iniciada", quando,
+                                        _automatico=True)
         eq._sincronizar_status(executor)
         return ultimo
 
@@ -146,6 +170,9 @@ class Manutencao:
         devolve o equipamento a 'disponivel' e, se informado, reavalia a conservacao.
         Com encerrar_chamado=True ja conclui o chamado. Devolve um resumo."""
         self._exigir_permissao(executor)
+        if encerrar_chamado and not executor.possui_permissao("gerenciar_chamados"):
+            raise PermissionError("So o administrador pode encerrar o chamado junto com a "
+                                  "manutencao.")
         if not self.em_andamento:
             raise RuntimeError("Nao ha atendimento em andamento.")
         if self._procedimentos == 0:
