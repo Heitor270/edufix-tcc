@@ -34,14 +34,13 @@ class Admin(Usuario):
         email: str,
         telefone: str,
         cpf: str,
-        data_nascimento: date,
         nivel_acesso: int = 1,
         permissoes: str = "",
         ativo: bool = True,
         data_cadastro: Optional[date] = None,
         ultimo_login: Optional[date] = None,
     ):
-        super().__init__(id_usuario, nome, senha, email, telefone, cpf, data_nascimento,
+        super().__init__(id_usuario, nome, senha, email, telefone, cpf,
                          ativo, data_cadastro, ultimo_login)
         if nivel_acesso not in PERMISSOES_DO_NIVEL:
             raise ValueError("nivel_acesso deve estar entre 1 e 5.")
@@ -85,7 +84,7 @@ class Admin(Usuario):
         self, acao: str, alvo: Usuario, nova_senha: Optional[str] = None, **dados
     ) -> str:
         """Gerencia outro usuario. Acoes: desativar, reativar, redefinir_senha (exige
-        nova_senha) e atualizar_perfil (**dados = nome/email/telefone/cpf/data_nascimento).
+        nova_senha) e atualizar_perfil (**dados = nome/email/telefone/cpf).
         Regras: precisa de 'gerenciar_usuarios'; ninguem gerencia a si proprio
         (evita se trancar fora); um admin so age sobre admin de nivel MENOR;
         desativar so e feito se o alvo nao tiver chamado em andamento."""
@@ -119,9 +118,9 @@ class Admin(Usuario):
             return f"Senha de {alvo.nome} redefinida."
         # atualizar_perfil
         campos = {k: v for k, v in dados.items()
-                  if k in ("nome", "email", "telefone", "cpf", "data_nascimento")}
+                  if k in ("nome", "email", "telefone", "cpf")}
         if not campos or len(campos) != len(dados):
-            raise ValueError("Informe campos validos: nome, email, telefone, cpf, data_nascimento.")
+            raise ValueError("Informe campos validos: nome, email, telefone, cpf.")
         mudou = alvo.atualizarPerfil(**campos)
         return (f"Perfil de {alvo.nome} atualizado ({', '.join(mudou)})."
                 if mudou else "Nada a alterar.")

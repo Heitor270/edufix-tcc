@@ -34,7 +34,6 @@ class Usuario:
         email: str,
         telefone: str,
         cpf: str,
-        data_nascimento: date,
         ativo: bool = True,
         data_cadastro: Optional[date] = None,
         ultimo_login: Optional[date] = None,
@@ -44,7 +43,6 @@ class Usuario:
         self.email = self._validar_email(email)
         self.telefone = self._validar_telefone(telefone)
         self.cpf = self._validar_cpf(cpf)
-        self.data_nascimento = self._validar_nascimento(data_nascimento)
         self.ativo = bool(ativo)
         self.data_cadastro = data_cadastro or date.today()
         self.ultimo_login = ultimo_login
@@ -96,16 +94,6 @@ class Usuario:
             raise ValueError("CPF invalido.")
         return re.sub(r"\D", "", cpf)
 
-    @staticmethod
-    def _validar_nascimento(nasc: date) -> date:
-        if isinstance(nasc, datetime):
-            nasc = nasc.date()
-        if nasc > date.today():
-            raise ValueError("Data de nascimento no futuro.")
-        if (date.today().year - nasc.year) > 120:
-            raise ValueError("Data de nascimento invalida.")
-        return nasc
-
     @classmethod
     def _validar_politica_senha(cls, s: str) -> None:
         faltas = []
@@ -150,12 +138,6 @@ class Usuario:
         return False
 
     @property
-    def idade(self) -> int:
-        hoje = date.today()
-        return hoje.year - self.data_nascimento.year - (
-            (hoje.month, hoje.day) < (self.data_nascimento.month, self.data_nascimento.day))
-
-    @property
     def chamados(self) -> Tuple["Chamado", ...]:
         return tuple(self._chamados)
 
@@ -195,8 +177,7 @@ class Usuario:
         return "Senha alterada com sucesso."
 
     def atualizarPerfil(self, nome: Optional[str] = None, email: Optional[str] = None,
-                        telefone: Optional[str] = None, cpf: Optional[str] = None,
-                        data_nascimento: Optional[date] = None
+                        telefone: Optional[str] = None, cpf: Optional[str] = None
                         ) -> Dict[str, Tuple[object, object]]:
         """Atualiza so o que foi informado. Valida TUDO antes de gravar (tudo ou nada)
         e devolve {campo: (valor_antigo, valor_novo)} apenas dos campos que mudaram."""
@@ -211,8 +192,6 @@ class Usuario:
             candidatos["telefone"] = self._validar_telefone(telefone)
         if cpf is not None:
             candidatos["cpf"] = self._validar_cpf(cpf)
-        if data_nascimento is not None:
-            candidatos["data_nascimento"] = self._validar_nascimento(data_nascimento)
         mudancas = {c: (getattr(self, c), v) for c, v in candidatos.items()
                     if getattr(self, c) != v}
         for campo, (_, novo) in mudancas.items():

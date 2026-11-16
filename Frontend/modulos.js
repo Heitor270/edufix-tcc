@@ -591,10 +591,12 @@ function renderizarUsuarios() {
             <td>${esc(u.email)}</td>
             <td>${esc(u.cpf) || '—'}</td>
             <td>${esc(u.telefone) || '—'}</td>
-            <td><span class="badge tipo-${esc(u.tipo_usuario)}">${u.tipo_usuario === 'admin' ? 'Administrador' : 'Usuário'}</span></td>
+            <td><span class="badge tipo-${esc(u.tipo_usuario)}">${u.tipo_usuario === 'admin' ? 'Administrador' : 'Usuário'}</span>${
+                u.tipo_usuario === 'admin' && u.nivel_acesso ? ` <span class="badge">Nível ${Number(u.nivel_acesso)}</span>` : ''}</td>
             <td>${Number(u.chamados_abertos || 0)}</td>
             <td class="celula-acoes">
                 <button class="btn-acao" data-acao="editar" data-id="${Number(u.id_usuario)}">Editar</button>
+                ${u.tipo_usuario === 'admin' && u.nivel_acesso ? `<button class="btn-acao" data-acao="nivel" data-id="${Number(u.id_usuario)}">Nível</button>` : ''}
                 <button class="btn-danger" data-acao="remover" data-id="${Number(u.id_usuario)}">Remover</button>
             </td>
         </tr>`).join('');
@@ -608,6 +610,7 @@ function setupUsuarios() {
         if (!btn) return;
         const u = todosUsuarios.find(x => x.id_usuario === Number(btn.dataset.id));
         if (btn.dataset.acao === 'editar') formEditarUsuario(u);
+        if (btn.dataset.acao === 'nivel') formNivelAdmin(u);
         if (btn.dataset.acao === 'remover') removerUsuario(u, btn);
     });
     carregarUsuarios();
@@ -637,7 +640,6 @@ function formEditarUsuario(u) {
             campoForm({ id: 'us-email', rotulo: 'E-mail *', tipo: 'email', valor: u.email, maxlength: 100 }) +
             campoForm({ id: 'us-cpf', rotulo: 'CPF (não editável)', valor: u.cpf, somenteLeitura: true }) +
             campoForm({ id: 'us-telefone', rotulo: 'Telefone', valor: u.telefone, placeholder: '(00) 00000-0000', modo: 'numeric', maxlength: 15 }) +
-            campoForm({ id: 'us-nasc', rotulo: 'Data de nascimento', tipo: 'date', valor: u.data_nascimento ? String(u.data_nascimento).slice(0, 10) : '' }) +
             campoForm({ id: 'us-tipo', rotulo: 'Perfil', opcoes: [['usuario', 'Usuário'], ['admin', 'Administrador']], valor: u.tipo_usuario }) +
             campoForm({ id: 'us-ativo', rotulo: 'Situação', opcoes: [['1', 'Ativo'], ['0', 'Inativo (não consegue entrar)']], valor: u.ativo === 0 ? '0' : '1' }) +
             campoForm({ id: 'us-senha', rotulo: 'Nova senha', tipo: 'password', placeholder: 'Deixe em branco para manter a atual',
@@ -665,7 +667,7 @@ function formEditarUsuario(u) {
                             method: 'PUT',
                             corpo: {
                                 nome: val('us-nome'), email: val('us-email').toLowerCase(), telefone: val('us-telefone'),
-                                data_nascimento: val('us-nasc') || null, tipo_usuario: val('us-tipo'), ativo: val('us-ativo') === '1',
+                                tipo_usuario: val('us-tipo'), ativo: val('us-ativo') === '1',
                                 senha: document.getElementById('us-senha').value,
                             },
                         });
@@ -693,6 +695,72 @@ function formEditarUsuario(u) {
     ligarConfirmacaoSenha('us-senha', 'us-senha2');
 }
 
+// Permissões que um administrador pode ter (iguais às da classe Admin e às conferidas no servidor).
+const PERMISSOES_ADMIN = [
+    ['gerenciar_usuarios',   'Gerenciar usuários (aba Usuários, níveis)'],
+    ['gerenciar_chamados',   'Gerenciar chamados (mudar status, excluir)'],
+    ['gerenciar_patrimonio', 'Gerenciar patrimônio (transferir bens)'],
+    ['emitir_relatorios',    'Emitir relatórios de usuários'],
+];
+// O que cada nível já garante sozinho (nível 3 em diante tem tudo).
+const PERMISSOES_DO_NIVEL = {
+    1: ['gerenciar_chamados', 'gerenciar_patrimonio'],
+    2: ['gerenciar_chamados', 'gerenciar_patrimonio', 'emitir_relatorios'],
+    3: PERMISSOES_ADMIN.map(p => p[0]), 4: PERMISSOES_ADMIN.map(p => p[0]), 5: PERMISSOES_ADMIN.map(p => p[0]),
+};
+
+function formNivelAdmin(u) {
+    const total = (u.permissoes || '').trim() === 'admin';
+    const extras = new Set((u.permissoes || '').split(',').map(x => x.trim()).filter(Boolean));
+    const modal = abrirModal({
+        titulo: `Nível de acesso — ${u.nome}`,
+        conteudo:
+            campoForm({ id: 'nv-nivel', rotulo: 'Nível (1 a 5)', valor: String(u.nivel_acesso || 1),
+                        opcoes: [1, 2, 3, 4, 5].map(n => [String(n), 'Nível ' + n]),
+                        dica: 'Nível 1: chamados e patrimônio. Nível 2: + relatórios. Nível 3 ou mais: tudo.' }) +
+            `<div class="form-group"><label>Permissões extras</label>
+                <label class="check-linha"><input type="checkbox" id="nv-total" ${total ? 'checked' : ''}> Todas as permissões (admin)</label>
+                ${PERMISSOES_ADMIN.map(([k, r]) =>
+                    `<label class="check-linha"><input type="checkbox" class="nv-perm" value="${esc(k)}" ${extras.has(k) ? 'checked' : ''}> ${esc(r)}</label>`).join('')}
+                <small class="dica-campo" id="nv-resumo"></small></div>`,
+        botoes: [
+            { rotulo: 'Cancelar', aoClicar: fecharModal },
+            {
+                rotulo: 'Salvar', tipo: 'primario',
+                aoClicar: async (btn, modal) => {
+                    const todas = document.getElementById('nv-total').checked;
+                    const marcadas = [...document.querySelectorAll('.nv-perm:checked')].map(c => c.value);
+                    definirCarregando(btn, true, 'Salvando...');
+                    try {
+                        await api(`/admin/${u.id_usuario}`, {
+                            method: 'PUT',
+                            corpo: { nivel_acesso: Number(val('nv-nivel')), permissoes: todas ? 'admin' : marcadas.join(',') },
+                        });
+                        mostrarToast('Nível de acesso atualizado.', 'sucesso');
+                        modal.fechar();
+                        carregarUsuarios();
+                    } catch (e) {
+                        mostrarToast(e.message, 'erro');   // ex.: tirar de si mesmo a gestão de usuários (403/400)
+                        definirCarregando(btn, false);
+                    }
+                },
+            },
+        ],
+    });
+    // resumo ao vivo do que o administrador poderá fazer
+    const resumo = () => {
+        const todas = document.getElementById('nv-total').checked;
+        document.querySelectorAll('.nv-perm').forEach(c => { c.disabled = todas; });
+        const efetivas = todas ? PERMISSOES_ADMIN.map(p => p[0]) : new Set([
+            ...PERMISSOES_DO_NIVEL[Number(val('nv-nivel'))],
+            ...[...document.querySelectorAll('.nv-perm:checked')].map(c => c.value)]);
+        const nomes = PERMISSOES_ADMIN.filter(p => [...efetivas].includes(p[0])).map(p => p[1].split(' (')[0]);
+        document.getElementById('nv-resumo').textContent = 'Poderá: ' + (nomes.join(', ') || 'nada');
+    };
+    modal.corpo.addEventListener('change', resumo);
+    resumo();
+}
+
 function formNovoUsuario() {
     const modal = abrirModal({
         titulo: 'Novo usuário',
@@ -701,7 +769,6 @@ function formNovoUsuario() {
             campoForm({ id: 'nu-email', rotulo: 'E-mail *', tipo: 'email', maxlength: 100, placeholder: 'nome@dominio.com' }) +
             campoForm({ id: 'nu-cpf', rotulo: 'CPF *', placeholder: '000.000.000-00', modo: 'numeric', maxlength: 14 }) +
             campoForm({ id: 'nu-telefone', rotulo: 'Telefone', placeholder: '(00) 00000-0000', modo: 'numeric', maxlength: 15 }) +
-            campoForm({ id: 'nu-nasc', rotulo: 'Data de nascimento *', tipo: 'date' }) +
             campoForm({ id: 'nu-senha', rotulo: 'Senha *', tipo: 'password',
                        dica: 'Mín. 8 caracteres, com maiúscula, minúscula, número e caractere especial.' }) +
             campoForm({ id: 'nu-senha2', rotulo: 'Confirmar senha *', tipo: 'password' }),
@@ -716,7 +783,6 @@ function formNovoUsuario() {
                     if (!val('nu-nome')) erro('nu-nome', 'O nome é obrigatório.');
                     if (!validarEmail(val('nu-email'))) erro('nu-email', MSG_EMAIL_INVALIDO);
                     if (!validarCPF(val('nu-cpf'))) erro('nu-cpf', 'CPF inválido.');
-                    if (!val('nu-nasc')) erro('nu-nasc', 'Informe a data de nascimento.');
                     const faltas = validarSenha(document.getElementById('nu-senha').value);
                     if (faltas.length) erro('nu-senha', 'Senha precisa de: ' + faltas.join(', ') + '.');
                     if (document.getElementById('nu-senha2').value !== document.getElementById('nu-senha').value)
@@ -728,7 +794,7 @@ function formNovoUsuario() {
                         await api('/cadastrar', {
                             corpo: {
                                 nome: val('nu-nome'), email: val('nu-email').toLowerCase(), senha: document.getElementById('nu-senha').value,
-                                cpf: val('nu-cpf'), telefone: val('nu-telefone'), data_nascimento: val('nu-nasc'),
+                                cpf: val('nu-cpf'), telefone: val('nu-telefone'),
                             },
                         });
                         mostrarToast('Usuário cadastrado.', 'sucesso');

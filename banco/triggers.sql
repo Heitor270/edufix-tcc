@@ -202,10 +202,6 @@ BEGIN
         IF fn_validar_cpf(NEW.cpf) = 0 THEN
             SIGNAL SQLSTATE '45400' SET MESSAGE_TEXT = 'CPF inválido.';
         END IF;
-        IF NEW.data_nascimento IS NOT NULL
-           AND (NEW.data_nascimento > CURDATE() OR NEW.data_nascimento < (CURDATE() - INTERVAL 120 YEAR)) THEN
-            SIGNAL SQLSTATE '45400' SET MESSAGE_TEXT = 'Data de nascimento inválida.';
-        END IF;
     END IF;
 END $$
 
@@ -234,10 +230,6 @@ BEGIN
     END IF;
     IF NOT (OLD.cpf <=> NEW.cpf) AND fn_validar_cpf(NEW.cpf) = 0 THEN
         SIGNAL SQLSTATE '45400' SET MESSAGE_TEXT = 'CPF inválido.';
-    END IF;
-    IF NOT (OLD.data_nascimento <=> NEW.data_nascimento) AND NEW.data_nascimento IS NOT NULL
-       AND (NEW.data_nascimento > CURDATE() OR NEW.data_nascimento < (CURDATE() - INTERVAL 120 YEAR)) THEN
-        SIGNAL SQLSTATE '45400' SET MESSAGE_TEXT = 'Data de nascimento inválida.';
     END IF;
 
     IF OLD.ativo = TRUE AND NEW.ativo = FALSE

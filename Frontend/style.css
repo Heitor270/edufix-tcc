@@ -1342,3 +1342,7 @@ html:not([data-theme="dark"]) .page-title { color: #0b2b2a; }
 
 /* itens só do administrador: ficam escondidos desde o primeiro desenho da página (sem "piscar") */
 html:not(.is-admin) [data-so-admin] { display: none !important; }
+
+/* checkboxes de permissões do administrador (modal "Nível") */
+.form-group .check-linha { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 13.5px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-dark); cursor: pointer; }
+.check-linha input { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }

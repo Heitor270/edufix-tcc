@@ -146,8 +146,8 @@ CALL sp_historico_equipamento(1);
 --   CALL sp_alterar_status_chamado(9999, 'aberto', 1, '');
 --   CALL sp_alterar_status_chamado(8, 'em_analise', 1, '');       -- concluído só reabre
 --   CALL sp_remover_usuario(1);
---   INSERT INTO usuario (nome,email,senha,cpf,data_nascimento)
---          VALUES ('Fulano','fulano@x.com','x','111.111.111-11','1990-01-01');   -- CPF inválido
+--   INSERT INTO usuario (nome,email,senha,cpf)
+--          VALUES ('Fulano','fulano@x.com','x','111.111.111-11');   -- CPF inválido
 
 
 -- ------------------------------------------------------------

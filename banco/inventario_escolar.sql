@@ -39,7 +39,6 @@ BEGIN
         telefone        VARCHAR(20),
         cpf             VARCHAR(14)   NOT NULL,
         ultimo_login    DATETIME,
-        data_nascimento DATE,
         tipo_usuario    ENUM('usuario', 'admin') NOT NULL DEFAULT 'usuario',
 
         CONSTRAINT pk_usuario        PRIMARY KEY (id_usuario),
